@@ -16,7 +16,11 @@ namespace Pausengong.App.ViewModels;
 /// </summary>
 public sealed record DeskSlot(NodeListItem? Node)
 {
-    public static DeskSlot Empty { get; } = new(null);
+    // Explicit (NodeListItem?) cast: plain `new(null)` is ambiguous between this record's own
+    // declared constructor and the implicit copy constructor every record gets (DeskSlot(DeskSlot)
+    // — `null` converts to either reference-type parameter equally well). Real CI failure 2026-10-19
+    // (CS0121), not something caught by reasoning alone — see HANDOFF.md Gotchas.
+    public static DeskSlot Empty { get; } = new((NodeListItem?)null);
 
     public bool IsOccupied => Node is not null;
 

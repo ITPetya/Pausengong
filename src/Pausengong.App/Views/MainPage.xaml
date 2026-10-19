@@ -102,28 +102,49 @@
              visual flavor, not the actual drop-target shape. That's a deliberate, disclosed
              simplification: true per-pixel polygon hit-testing isn't something WinUI3 supports
              out of the box, and this project has no way to visually verify custom hit-testing
-             code anyway (no Windows in the tool environment this was written in). -->
+             code anyway (no Windows in the tool environment this was written in).
+
+             Multi-row "building" layout (requested 2026-10-19: "wie ein zusammenhängendes
+             Gebäude... nicht nur links und rechts nebeneinander"): rooms used to be one single
+             horizontal strip; now ViewModel.RoomRows (MainViewModel) groups them into rows of
+             LayoutColumns, and this is a vertical ItemsControl-of-rows wrapping a horizontal
+             ItemsControl-of-rooms per row (RoomRow.cs/RoomRow.Rooms) — nested plain ItemsControls
+             rather than a Canvas with computed absolute positions: much lower risk to get right
+             blind (no generic x:DataType, no Canvas.Left/Top attached-property binding, reuses
+             the exact already-reasoned-through per-room template unchanged, just one level
+             deeper). -->
         <ScrollViewer Grid.Row="3"
                       HorizontalScrollMode="Enabled"
                       HorizontalScrollBarVisibility="Auto"
-                      VerticalScrollMode="Disabled"
-                      VerticalScrollBarVisibility="Disabled">
-            <ItemsControl ItemsSource="{x:Bind ViewModel.Rooms, Mode=OneWay}">
+                      VerticalScrollMode="Enabled"
+                      VerticalScrollBarVisibility="Auto">
+            <ItemsControl ItemsSource="{x:Bind ViewModel.RoomRows, Mode=OneWay}">
                 <ItemsControl.ItemsPanel>
                     <ItemsPanelTemplate>
-                        <StackPanel Orientation="Horizontal" Spacing="0" VerticalAlignment="Top" />
+                        <StackPanel Orientation="Vertical" Spacing="0" HorizontalAlignment="Left" />
                     </ItemsPanelTemplate>
                 </ItemsControl.ItemsPanel>
                 <ItemsControl.ItemTemplate>
-                    <DataTemplate x:DataType="vm:RoomViewModel">
-                        <!-- Each item is [room][door connector to the next room] side by side, so
-                             reducing the ItemsPanel's own Spacing to 0 above makes the door
-                             symbol the only visible gap between two rooms. Simplification,
-                             disclosed: the last room in the list still gets a trailing door
-                             stub pointing at nothing (detecting "is this the last item" from
-                             inside a plain DataTemplate needs more machinery than this is worth
-                             — a short stub at the end is a harmless cosmetic loose end, not a
-                             functional problem). -->
+                    <DataTemplate x:DataType="vm:RoomRow">
+                        <StackPanel Orientation="Vertical" Spacing="0" HorizontalAlignment="Left">
+                            <ItemsControl ItemsSource="{x:Bind Rooms, Mode=OneWay}">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <StackPanel Orientation="Horizontal" Spacing="0" VerticalAlignment="Top" />
+                                    </ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate x:DataType="vm:RoomViewModel">
+                        <!-- Each item is [room][door connector to the next room in this row] side
+                             by side, so reducing the ItemsPanel's own Spacing to 0 above makes
+                             the door symbol the only visible gap between two rooms. Simplification,
+                             disclosed: the last room in a row still gets a trailing door stub
+                             pointing at nothing (detecting "is this the last item" from inside a
+                             plain DataTemplate needs more machinery than this is worth — a short
+                             stub at the end is a harmless cosmetic loose end, not a functional
+                             problem; the row-to-row vertical connector below does track this
+                             properly via RoomRow.HasRowBelow, since that's computed centrally in
+                             MainViewModel rather than needed per-item here). -->
                         <StackPanel Orientation="Horizontal" VerticalAlignment="Bottom" Spacing="0">
                             <Grid Width="{x:Bind GridWidth, Mode=OneWay}" Height="{x:Bind GridHeight, Mode=OneWay}">
                                 <!-- Walls: a single thick stroke rather than true double-line
@@ -212,16 +233,35 @@
                                 </Grid>
                             </Grid>
 
-                            <!-- Door connector to the next room ("per Tür verbunden", requested
-                                 2026-10-19): a door-leaf line plus a dashed quarter-circle swing
-                                 arc, the standard architectural-drawing door symbol. Simplified:
-                                 fixed size, not aligned to either room's actual wall-meeting
-                                 point (rooms differ in height and aren't flush), so this reads as
-                                 "connected via a door" rather than an architecturally exact
-                                 junction. -->
-                            <Grid Width="26" Height="26" VerticalAlignment="Bottom" Margin="0,0,0,4">
-                                <Path Data="M 2,26 L 2,2" Stroke="{StaticResource RoomOutlineBrush}" StrokeThickness="1.5" />
-                                <Path Data="M 2,2 A 24,24 0 0 1 26,26" Stroke="{StaticResource RoomOutlineBrush}"
+                            <!-- Horizontal door connector to the next room in this row ("per Tür
+                                 verbunden", requested 2026-10-19) — simplified 2026-10-19 after
+                                 "die Türen waren auch noch etwas buggy": dropped the Path/ArcSegment
+                                 quarter-circle swing (the most complex, least-certain geometry in
+                                 the whole visualization, most likely the actual bug) for two plain
+                                 Line elements — a door-leaf line plus a short diagonal suggesting
+                                 the opening. Far fewer ways for this to render wrong. Fixed size,
+                                 not aligned to either room's actual wall-meeting point (rooms
+                                 differ in height and aren't flush), so this reads as "connected via
+                                 a door" rather than an architecturally exact junction. -->
+                            <Grid Width="24" Height="24" VerticalAlignment="Bottom" Margin="0,0,0,4">
+                                <Line X1="2" Y1="22" X2="2" Y2="2" Stroke="{StaticResource RoomOutlineBrush}" StrokeThickness="1.5" />
+                                <Line X1="2" Y1="2" X2="20" Y2="20" Stroke="{StaticResource RoomOutlineBrush}"
+                                      StrokeThickness="1" StrokeDashArray="2,2" />
+                            </Grid>
+                                        </StackPanel>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+
+                            <!-- Vertical door connector to the row below — only drawn when there
+                                 actually is one (RoomRow.HasRowBelow, computed centrally in
+                                 MainViewModel.RebuildRoomRows), so unlike the horizontal one above
+                                 this doesn't leave a dangling stub on the last row. Same simplified
+                                 Line-based symbol, rotated. -->
+                            <Grid Width="24" Height="24" HorizontalAlignment="Left" Margin="40,0,0,0"
+                                  Visibility="{x:Bind HasRowBelowVisibility, Mode=OneWay}">
+                                <Line X1="2" Y1="2" X2="22" Y2="2" Stroke="{StaticResource RoomOutlineBrush}" StrokeThickness="1.5" />
+                                <Line X1="2" Y1="2" X2="2" Y2="20" Stroke="{StaticResource RoomOutlineBrush}"
                                       StrokeThickness="1" StrokeDashArray="2,2" />
                             </Grid>
                         </StackPanel>

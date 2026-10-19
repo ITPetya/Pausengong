@@ -62,7 +62,20 @@ public partial class MainViewModel : ObservableObject
     private string _currentHostLabel = "wird ermittelt …";
     private DispatcherQueueTimer? _bannerTimer;
 
+    // Rooms per row in the "building" layout (requested 2026-10-19: "wie ein zusammenhängendes
+    // Gebäude mit mehreren Räumen", not one long strip side by side) — see RoomRows below.
+    // Arbitrary, adjustable: nobody has seen this on screen to tune it against a real room count.
+    private const int LayoutColumns = 2;
+
     public ObservableCollection<RoomViewModel> Rooms { get; } = new();
+
+    /// <summary>Rooms grouped into rows of <see cref="LayoutColumns"/> for MainPage.xaml's
+    /// nested-<c>ItemsControl</c> layout — rebuilt wholesale on every <see cref="Rooms"/> change
+    /// (add/remove/clear all route through the one <see cref="ObservableCollection{T}.CollectionChanged"/>
+    /// subscription in the constructor). A plain rebuild, not an incremental update: room counts
+    /// here are small (an office/school's worth of rooms), so this is cheap enough to not be
+    /// worth the extra complexity of patching it in place.</summary>
+    public ObservableCollection<RoomRow> RoomRows { get; } = new();
 
     public MainViewModel(
         ConfigStore configStore,
@@ -84,6 +97,7 @@ public partial class MainViewModel : ObservableObject
         _configStore.ConfigChanged += OnConfigChanged;
         _nodePresence.NodesChanged += OnPresenceNodesChanged;
         _ringCoordinator.DrawPreviewChanged += OnDrawPreviewChanged;
+        Rooms.CollectionChanged += (_, _) => RebuildRoomRows();
 
         _currentVersion = Assembly.GetExecutingAssembly().GetName().Version ?? new Version(0, 0, 0);
         CurrentVersionText = "v" + _currentVersion.ToString(3);
@@ -254,6 +268,18 @@ public partial class MainViewModel : ObservableObject
         if (addedAny)
         {
             PersistRooms();
+        }
+    }
+
+    private void RebuildRoomRows()
+    {
+        RoomRows.Clear();
+        var rowCount = (int)Math.Ceiling(Rooms.Count / (double)LayoutColumns);
+        for (var i = 0; i < Rooms.Count; i += LayoutColumns)
+        {
+            var rowRooms = Rooms.Skip(i).Take(LayoutColumns).ToList();
+            var isLastRow = (i / LayoutColumns) == rowCount - 1;
+            RoomRows.Add(new RoomRow(rowRooms, HasRowBelow: !isLastRow));
         }
     }
 
