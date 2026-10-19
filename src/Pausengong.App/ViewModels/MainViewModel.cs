@@ -371,6 +371,12 @@ public partial class MainViewModel : ObservableObject
         PersistRooms();
     }
 
+    /// <summary>Called once an inline room rename finishes (Enter or losing focus — see
+    /// MainPage.xaml.cs). <paramref name="room"/>'s <c>Name</c> is already updated by then (the
+    /// editing <c>TextBox</c> is two-way bound straight to it); this just persists/syncs it,
+    /// same as every other room-list mutation.</summary>
+    public void CommitRoomRename(RoomViewModel room) => PersistRooms();
+
     private void PersistRooms()
     {
         var groups = Rooms.Select(r => new RoomGroup(r.RoomId, r.Name, r.Nodes.Select(n => n.NodeId).ToList())).ToList();

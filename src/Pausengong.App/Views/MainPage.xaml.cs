@@ -118,22 +118,56 @@ public sealed partial class MainPage : Page
         ViewModel.RemoveRoomCommand.Execute(room);
     }
 
-    // The delete "✕" only shows while hovering the room name itself (requested 2026-10-19) —
-    // RoomViewModel.IsHeaderHovered drives EffectiveDeleteButtonVisibility, which the button in
-    // MainPage.xaml binds to.
+    // The rename/delete controls only show while hovering the room name itself (requested
+    // 2026-10-19) — RoomViewModel.IsHeaderHovered drives EditButtonVisibility/
+    // EffectiveDeleteButtonVisibility, which MainPage.xaml binds to.
     private void OnRoomLabelPointerEntered(object sender, Microsoft.UI.Xaml.Input.PointerRoutedEventArgs e) =>
         ((ViewModels.RoomViewModel)((FrameworkElement)sender).Tag).IsHeaderHovered = true;
 
     private void OnRoomLabelPointerExited(object sender, Microsoft.UI.Xaml.Input.PointerRoutedEventArgs e) =>
         ((ViewModels.RoomViewModel)((FrameworkElement)sender).Tag).IsHeaderHovered = false;
 
+    // Inline rename (requested 2026-10-19: hovering the name should offer renaming, not just
+    // deleting). The editing TextBox is two-way bound straight to RoomViewModel.Name (see
+    // MainPage.xaml), so by the time any of these fire the rename has already happened locally —
+    // they only need to flip IsEditingName back off and persist/sync it.
+    private void OnEditRoomNameClicked(object sender, RoutedEventArgs e) =>
+        ((ViewModels.RoomViewModel)((Button)sender).Tag).IsEditingName = true;
+
+    private void OnRoomNameTextBoxKeyDown(object sender, Microsoft.UI.Xaml.Input.KeyRoutedEventArgs e)
+    {
+        if (e.Key != Windows.System.VirtualKey.Enter && e.Key != Windows.System.VirtualKey.Escape)
+        {
+            return;
+        }
+
+        // Escape does not revert in-progress typing — Name is already live-bound by then, there
+        // is no separate draft/cancel buffer. Disclosed simplification, not an oversight.
+        var room = (ViewModels.RoomViewModel)((TextBox)sender).Tag;
+        room.IsEditingName = false;
+        ViewModel.CommitRoomRename(room);
+    }
+
+    private void OnRoomNameEditingLostFocus(object sender, RoutedEventArgs e)
+    {
+        var room = (ViewModels.RoomViewModel)((TextBox)sender).Tag;
+        room.IsEditingName = false;
+        ViewModel.CommitRoomRename(room);
+    }
+
     private void OnNodeDragItemsStarting(object sender, DragItemsStartingEventArgs e)
     {
-        if (e.Items.Count > 0 && e.Items[0] is ViewModels.NodeListItem node)
+        // The desk grid's ItemsSource is RoomViewModel.DeskSlots now (real devices + decorative
+        // empty-desk placeholders, see DeskSlot.cs) — an empty placeholder (Node == null) must
+        // never be draggable.
+        if (e.Items.Count == 0 || e.Items[0] is not ViewModels.DeskSlot { Node: { } node })
         {
-            e.Data.SetText(node.NodeId);
-            e.Data.RequestedOperation = DataPackageOperation.Move;
+            e.Cancel = true;
+            return;
         }
+
+        e.Data.SetText(node.NodeId);
+        e.Data.RequestedOperation = DataPackageOperation.Move;
     }
 
     private void OnListDragOver(object sender, DragEventArgs e)

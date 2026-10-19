@@ -137,58 +137,79 @@
                                          Stroke="{StaticResource RoomOutlineBrush}"
                                          StrokeThickness="3" />
 
-                                <!-- Room name "auf dem Boden" (on the floor) — centered, behind
-                                     the devices (lower in the visual tree = lower z-order),
-                                     dimmed so furniture on top of it stays readable. The delete
-                                     "✕" only appears while hovering this specific area (requested
-                                     2026-10-19) — see RoomViewModel.IsHeaderHovered /
-                                     EffectiveDeleteButtonVisibility and the PointerEntered/Exited
-                                     handlers in MainPage.xaml.cs. -->
-                                <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"
-                                            Orientation="Horizontal" Spacing="4"
-                                            Tag="{x:Bind}"
-                                            PointerEntered="OnRoomLabelPointerEntered"
-                                            PointerExited="OnRoomLabelPointerExited">
-                                    <TextBlock Text="{x:Bind Name, Mode=OneWay}" FontWeight="SemiBold"
-                                               FontFamily="Consolas" Foreground="{StaticResource RoomOutlineBrush}"
-                                               Opacity="0.8" TextTrimming="CharacterEllipsis" />
-                                    <Button Content="✕" Padding="4,0" FontSize="10" Tag="{x:Bind}" Click="OnDeleteRoomClicked"
-                                            Visibility="{x:Bind EffectiveDeleteButtonVisibility, Mode=OneWay}"
-                                            ToolTipService.ToolTip="Raum löschen" />
-                                </StackPanel>
+                                <!-- Two structurally separate zones (requested 2026-10-19: "klarere
+                                     Zonen... kein Tisch kollidiert mit der Bezeichnung") instead of
+                                     the previous floating-overlay name, which the desk grid could
+                                     and did visually collide with: an Auto row reserved for the
+                                     name at the bottom ("auf dem Boden") that the desk GridView
+                                     above it can never be laid out into, by ordinary Grid-row
+                                     partitioning rather than manual position math. -->
+                                <Grid Margin="{x:Bind ContentMargin, Mode=OneWay}">
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="*" />
+                                        <RowDefinition Height="Auto" />
+                                    </Grid.RowDefinitions>
 
-                                <!-- The actual drop target (see the note above the ScrollViewer)
-                                     — a GridView so devices auto-wrap into a grid instead of one
-                                     column, same drag/drop handlers as the old ListView (GridView
-                                     shares the ListViewBase base class, see OnRoomDrop's cast).
-                                     Each item renders as a small desk-with-monitor symbol
-                                     ("Arbeitsplatz", requested 2026-10-19) instead of a plain
-                                     bordered text chip. -->
-                                <GridView ItemsSource="{x:Bind Nodes, Mode=OneWay}"
-                                          Margin="{x:Bind ContentMargin, Mode=OneWay}"
-                                          SelectionMode="None"
-                                          CanDragItems="True"
-                                          AllowDrop="True"
-                                          DragItemsStarting="OnNodeDragItemsStarting"
-                                          Drop="OnRoomDrop"
-                                          DragOver="OnListDragOver"
-                                          Tag="{x:Bind}"
-                                          Background="Transparent">
-                                    <GridView.ItemTemplate>
-                                        <DataTemplate x:DataType="vm:NodeListItem">
-                                            <StackPanel Spacing="2" Margin="2" Width="56">
-                                                <Grid Height="36">
-                                                    <Rectangle Stroke="{StaticResource RoomDeviceChipBrush}" StrokeThickness="1" Fill="Transparent" />
-                                                    <Rectangle Width="22" Height="5" Fill="{StaticResource RoomDeviceChipBrush}"
-                                                               VerticalAlignment="Top" Margin="0,5,0,0" HorizontalAlignment="Center" />
-                                                </Grid>
-                                                <TextBlock Text="{x:Bind DisplayLabel, Mode=OneWay}" FontFamily="Consolas"
-                                                           Foreground="{StaticResource RoomOutlineBrush}" FontSize="10"
-                                                           HorizontalAlignment="Center" TextTrimming="CharacterEllipsis" />
-                                            </StackPanel>
-                                        </DataTemplate>
-                                    </GridView.ItemTemplate>
-                                </GridView>
+                                    <!-- The actual drop target — a GridView so devices auto-wrap
+                                         into a grid instead of one column, same drag/drop handlers
+                                         as the old ListView (GridView shares the ListViewBase base
+                                         class, see OnRoomDrop's cast). ItemsSource is DeskSlots,
+                                         not Nodes directly (requested 2026-10-19: rooms should
+                                         always show "mehrere leere Tische", not just the real
+                                         occupied ones) — see DeskSlot.cs/RoomViewModel.DeskSlots.
+                                         Each slot renders as a small desk-with-monitor symbol
+                                         ("Arbeitsplatz"), dimmed when empty. -->
+                                    <GridView Grid.Row="0"
+                                              ItemsSource="{x:Bind DeskSlots, Mode=OneWay}"
+                                              SelectionMode="None"
+                                              CanDragItems="True"
+                                              AllowDrop="True"
+                                              DragItemsStarting="OnNodeDragItemsStarting"
+                                              Drop="OnRoomDrop"
+                                              DragOver="OnListDragOver"
+                                              Tag="{x:Bind}"
+                                              Background="Transparent">
+                                        <GridView.ItemTemplate>
+                                            <DataTemplate x:DataType="vm:DeskSlot">
+                                                <StackPanel Spacing="2" Margin="2" Width="56" Opacity="{x:Bind VisualOpacity, Mode=OneWay}">
+                                                    <Grid Height="36">
+                                                        <Rectangle Stroke="{StaticResource RoomDeviceChipBrush}" StrokeThickness="1" Fill="Transparent" />
+                                                        <Rectangle Width="22" Height="5" Fill="{StaticResource RoomDeviceChipBrush}"
+                                                                   VerticalAlignment="Top" Margin="0,5,0,0" HorizontalAlignment="Center" />
+                                                    </Grid>
+                                                    <TextBlock Text="{x:Bind Node.DisplayLabel, Mode=OneWay}" FontFamily="Consolas"
+                                                               Foreground="{StaticResource RoomOutlineBrush}" FontSize="10"
+                                                               HorizontalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                                                </StackPanel>
+                                            </DataTemplate>
+                                        </GridView.ItemTemplate>
+                                    </GridView>
+
+                                    <!-- Room name "auf dem Boden" (on the floor) — its own
+                                         reserved row now, guaranteed clear of desks. Hovering
+                                         offers rename (requested 2026-10-19, "nicht nur löschen")
+                                         as well as delete — see RoomViewModel.IsHeaderHovered/
+                                         IsEditingName and the handlers in MainPage.xaml.cs. -->
+                                    <StackPanel Grid.Row="1" HorizontalAlignment="Center" Margin="0,6,0,0"
+                                                Orientation="Horizontal" Spacing="4"
+                                                Tag="{x:Bind}"
+                                                PointerEntered="OnRoomLabelPointerEntered"
+                                                PointerExited="OnRoomLabelPointerExited">
+                                        <TextBlock Text="{x:Bind Name, Mode=OneWay}" FontWeight="SemiBold"
+                                                   FontFamily="Consolas" Foreground="{StaticResource RoomOutlineBrush}"
+                                                   Visibility="{x:Bind NameTextVisibility, Mode=OneWay}"
+                                                   TextTrimming="CharacterEllipsis" />
+                                        <TextBox Text="{x:Bind Name, Mode=TwoWay}" FontFamily="Consolas" Width="110"
+                                                 Visibility="{x:Bind NameEditVisibility, Mode=OneWay}"
+                                                 Tag="{x:Bind}" KeyDown="OnRoomNameTextBoxKeyDown" LostFocus="OnRoomNameEditingLostFocus" />
+                                        <Button Content="✎" Padding="4,0" FontSize="10" Tag="{x:Bind}" Click="OnEditRoomNameClicked"
+                                                Visibility="{x:Bind EditButtonVisibility, Mode=OneWay}"
+                                                ToolTipService.ToolTip="Raum umbenennen" />
+                                        <Button Content="✕" Padding="4,0" FontSize="10" Tag="{x:Bind}" Click="OnDeleteRoomClicked"
+                                                Visibility="{x:Bind EffectiveDeleteButtonVisibility, Mode=OneWay}"
+                                                ToolTipService.ToolTip="Raum löschen" />
+                                    </StackPanel>
+                                </Grid>
                             </Grid>
 
                             <!-- Door connector to the next room ("per Tür verbunden", requested

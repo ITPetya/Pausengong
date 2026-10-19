@@ -40,6 +40,16 @@ public sealed class MqttNodeClient : IMqttNodeClient, IAsyncDisposable
             .WithWillPayload("offline")
             .WithWillRetain(true)
             .WithCleanSession(true)
+            // Explicit, short keep-alive (added 2026-10-19, real-world bug report: a powered-off
+            // PC's room entry stayed listed long after it was gone). No KeepAlivePeriod was set
+            // before, so the server relied on whatever MQTTnet's internal default is to notice a
+            // dead TCP connection and fire the Will/offline message — plausible root cause, not
+            // confirmed against the library source. A PC that's simply switched off never sends
+            // an MQTT DISCONNECT, so a short keep-alive is the only way the broker finds out in a
+            // reasonable time at all: the MQTT spec has the server treat a client as gone after
+            // 1.5x the keep-alive period with no traffic, so 15s here means stale peers disappear
+            // within roughly 20-25s instead of whatever the unset default previously allowed.
+            .WithKeepAlivePeriod(TimeSpan.FromSeconds(15))
             .Build();
 
         var result = await _client.ConnectAsync(options, ct);
