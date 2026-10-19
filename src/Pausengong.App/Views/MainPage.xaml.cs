@@ -13,6 +13,7 @@ using Pausengong.Core.Election.Discovery;
 using Pausengong.Core.Mqtt;
 using Pausengong.Core.Presence;
 using Pausengong.Core.Scheduling;
+using Pausengong.Core.Updates;
 
 namespace Pausengong.App;
 
@@ -27,7 +28,7 @@ public sealed partial class MainPage : Page
     // ContextFlyout (see MainPage.xaml) it isn't affected by whatever disables that.
     public ICommand ShowFromTrayCommand { get; }
 
-    public MainPage(IServiceProvider services, MainWindow window)
+    public MainPage(IServiceProvider services, MainWindow window, UpdateCheckResult initialUpdateResult)
     {
         _services = services;
         _window = window;
@@ -36,7 +37,10 @@ public sealed partial class MainPage : Page
             services.GetRequiredService<ConfigSyncService>(),
             services.GetRequiredService<NodePresenceService>(),
             services.GetRequiredService<RingCoordinatorService>(),
-            DispatcherQueue);
+            services.GetRequiredService<UpdateService>(),
+            services.GetRequiredService<IToastService>(),
+            DispatcherQueue,
+            initialUpdateResult);
         ShowFromTrayCommand = new RelayCommand(_window.ShowFromTray);
 
         InitializeComponent();
@@ -98,6 +102,9 @@ public sealed partial class MainPage : Page
             File.AppendAllText(logPath, $"{DateTimeOffset.Now:O}  StartNetworkingAsync failed:{Environment.NewLine}{ex}{Environment.NewLine}{Environment.NewLine}");
         }
     }
+
+    private void OnVersionTextTapped(object sender, Microsoft.UI.Xaml.Input.TappedRoutedEventArgs e) =>
+        ViewModel.CheckForUpdatesCommand.Execute(null);
 
     private void OnAddRoomClicked(object sender, RoutedEventArgs e)
     {

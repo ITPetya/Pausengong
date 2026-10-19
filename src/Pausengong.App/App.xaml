@@ -26,6 +26,18 @@
             <SolidColorBrush x:Key="ListViewItemBackgroundSelected" Color="#4DD97706" />
             <SolidColorBrush x:Key="ListViewItemBackgroundSelectedPointerOver" Color="#73D97706" />
             <SolidColorBrush x:Key="ListViewItemBackgroundSelectedPressed" Color="#99D97706" />
+
+            <!-- Room floor-plan visualization (added 2026-10-19, corrected 2026-10-19 after a
+                 real screenshot showed the room outline was invisible): same lesson as the
+                 ListView override above, applied here too late the first time — the
+                 Card*ColorDefaultBrush theme resources are deliberately LOW-contrast (meant for
+                 faint card edges), not a legible room outline against this app's black
+                 background. Explicit high-contrast colors instead, chosen for a CAD/blueprint
+                 "engineering drawing" look (the maintainer's request 2026-10-19) rather than a
+                 themed card. -->
+            <SolidColorBrush x:Key="RoomOutlineBrush" Color="#E8EAED" />
+            <SolidColorBrush x:Key="RoomFillBrush" Color="#14E8EAED" />
+            <SolidColorBrush x:Key="RoomDeviceChipBrush" Color="#A8E8EAED" />
         </ResourceDictionary>
     </Application.Resources>
 </Application>

@@ -1,12 +1,16 @@
 using System.Collections.ObjectModel;
+using System.Reflection;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Microsoft.UI.Dispatching;
+using Microsoft.UI.Xaml.Controls;
+using Pausengong.Core.Audio;
 using Pausengong.Core.Config;
 using Pausengong.Core.Election;
 using Pausengong.Core.Models;
 using Pausengong.Core.Presence;
 using Pausengong.Core.Scheduling;
+using Pausengong.Core.Updates;
 
 namespace Pausengong.App.ViewModels;
 
@@ -16,9 +20,30 @@ public partial class MainViewModel : ObservableObject
     private readonly ConfigSyncService _configSync;
     private readonly NodePresenceService _nodePresence;
     private readonly RingCoordinatorService _ringCoordinator;
+    private readonly UpdateService _updateService;
+    private readonly IToastService _toastService;
+    private readonly Version _currentVersion;
     private readonly DispatcherQueue _dispatcherQueue;
     private ChefElectionService? _electionService;
     private NodeIdentity? _identity;
+
+    /// <summary>"v1.0.0" — shown small/grey in the bottom-right corner (see MainPage.xaml),
+    /// clickable to re-check (<see cref="CheckForUpdatesCommand"/>). Always shows the currently
+    /// running version, independent of whether an update is available.</summary>
+    [ObservableProperty]
+    private string _currentVersionText = "v?";
+
+    /// <summary>Backs the update notice <c>InfoBar</c> in MainPage.xaml. Never opened for
+    /// <see cref="UpdateUrgency.Mandatory"/> — that case is handled before the main window even
+    /// loads, see <c>App.xaml.cs</c>/<c>UpdateRequiredWindow</c>.</summary>
+    [ObservableProperty]
+    private bool _updateBannerIsOpen;
+
+    [ObservableProperty]
+    private string _updateBannerMessage = string.Empty;
+
+    [ObservableProperty]
+    private InfoBarSeverity _updateBannerSeverity = InfoBarSeverity.Informational;
 
     /// <summary>"Nächster Gong um: HH:mm Uhr — Aktueller Host: Name (IP)" — always-on status strip.</summary>
     [ObservableProperty]
@@ -39,16 +64,30 @@ public partial class MainViewModel : ObservableObject
 
     public ObservableCollection<RoomViewModel> Rooms { get; } = new();
 
-    public MainViewModel(ConfigStore configStore, ConfigSyncService configSync, NodePresenceService nodePresence, RingCoordinatorService ringCoordinator, DispatcherQueue dispatcherQueue)
+    public MainViewModel(
+        ConfigStore configStore,
+        ConfigSyncService configSync,
+        NodePresenceService nodePresence,
+        RingCoordinatorService ringCoordinator,
+        UpdateService updateService,
+        IToastService toastService,
+        DispatcherQueue dispatcherQueue,
+        UpdateCheckResult initialUpdateResult)
     {
         _configStore = configStore;
         _configSync = configSync;
         _nodePresence = nodePresence;
         _ringCoordinator = ringCoordinator;
+        _updateService = updateService;
+        _toastService = toastService;
         _dispatcherQueue = dispatcherQueue;
         _configStore.ConfigChanged += OnConfigChanged;
         _nodePresence.NodesChanged += OnPresenceNodesChanged;
         _ringCoordinator.DrawPreviewChanged += OnDrawPreviewChanged;
+
+        _currentVersion = Assembly.GetExecutingAssembly().GetName().Version ?? new Version(0, 0, 0);
+        CurrentVersionText = "v" + _currentVersion.ToString(3);
+        ApplyUpdateResult(initialUpdateResult); // the check already ran once in App.xaml.cs before this window was shown
 
         _bannerTimer = _dispatcherQueue.CreateTimer();
         _bannerTimer.Interval = TimeSpan.FromSeconds(30);
@@ -67,6 +106,54 @@ public partial class MainViewModel : ObservableObject
         _bannerTimer?.Start();
 
         electionService.ChefChanged += OnChefChanged;
+    }
+
+    /// <summary>Bound to the version text's Tapped handler in MainPage.xaml — re-checks right
+    /// now and always reports something back (an InfoBar for an available update, a toast if
+    /// already up to date), unlike <see cref="RefreshUpdateStatusSilentlyAsync"/>.</summary>
+    [RelayCommand]
+    private async Task CheckForUpdatesAsync()
+    {
+        var result = await _updateService.CheckAsync(_currentVersion);
+        ApplyUpdateResult(result);
+
+        if (!result.IsUpdateAvailable)
+        {
+            await _toastService.ShowSimpleNotificationAsync("Pausengong ist aktuell", CurrentVersionText);
+        }
+    }
+
+    /// <summary>Called when the window is (re)shown from the tray (see MainWindow.ShowFromTray) —
+    /// same check, but doesn't nag with an "up to date" toast every single time someone reopens
+    /// the window; an available update still opens the InfoBar either way.</summary>
+    public async Task RefreshUpdateStatusSilentlyAsync()
+    {
+        var result = await _updateService.CheckAsync(_currentVersion);
+        ApplyUpdateResult(result);
+    }
+
+    private void ApplyUpdateResult(UpdateCheckResult result)
+    {
+        if (!result.IsUpdateAvailable)
+        {
+            UpdateBannerIsOpen = false;
+            return;
+        }
+
+        // Mandatory is handled before the main window ever loads (App.xaml.cs /
+        // UpdateRequiredWindow) — if one shows up here anyway (e.g. discovered by a manual
+        // re-check while already running), it's still just the strongest non-blocking banner,
+        // since the app is already running at this point and can't retroactively un-load.
+        UpdateBannerSeverity = result.Urgency switch
+        {
+            UpdateUrgency.Mandatory => InfoBarSeverity.Error,
+            UpdateUrgency.Important => InfoBarSeverity.Warning,
+            _ => InfoBarSeverity.Informational,
+        };
+        UpdateBannerMessage = string.IsNullOrWhiteSpace(result.Message)
+            ? $"Update verfügbar: v{result.LatestVersion}"
+            : $"Update verfügbar: v{result.LatestVersion} — {result.Message}";
+        UpdateBannerIsOpen = true;
     }
 
     private void OnConfigChanged(AppConfig config)

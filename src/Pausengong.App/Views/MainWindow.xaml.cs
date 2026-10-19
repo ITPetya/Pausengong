@@ -1,6 +1,7 @@
 using Microsoft.UI;
 using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
+using Pausengong.Core.Updates;
 using WinRT.Interop;
 
 namespace Pausengong.App;
@@ -8,9 +9,10 @@ namespace Pausengong.App;
 public sealed partial class MainWindow : Window
 {
     private readonly AppWindow _appWindow;
+    private readonly MainPage _mainPage;
     private bool _allowClose;
 
-    public MainWindow(IServiceProvider services)
+    public MainWindow(IServiceProvider services, UpdateCheckResult initialUpdateResult)
     {
         InitializeComponent();
         Title = "Pausengong";
@@ -21,7 +23,8 @@ public sealed partial class MainWindow : Window
         _appWindow.SetIcon(AssetExtractor.LogoIcoPath);
         _appWindow.Closing += OnAppWindowClosing;
 
-        Content = new MainPage(services, this);
+        _mainPage = new MainPage(services, this, initialUpdateResult);
+        Content = _mainPage;
     }
 
     private void OnAppWindowClosing(AppWindow sender, AppWindowClosingEventArgs args)
@@ -42,6 +45,10 @@ public sealed partial class MainWindow : Window
     {
         _appWindow.Show();
         Activate();
+
+        // "beim Öffnen des Fensters" (the maintainer's requirement, 2026-10-19) — silent unless
+        // it actually finds something, see MainViewModel.RefreshUpdateStatusSilentlyAsync.
+        _ = _mainPage.ViewModel.RefreshUpdateStatusSilentlyAsync();
     }
 
     public void ExitApplication()

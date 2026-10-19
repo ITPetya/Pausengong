@@ -35,6 +35,8 @@ public class RingCoordinatorServiceTests : IDisposable
             WasCalled = true;
             return Task.CompletedTask;
         }
+
+        public Task ShowSimpleNotificationAsync(string title, string message, CancellationToken ct = default) => Task.CompletedTask;
     }
 
     private async Task<(ConfigStore Store, RingExecutor Executor, FakeGongPlayer Gong)> CreateRingExecutorAsync()

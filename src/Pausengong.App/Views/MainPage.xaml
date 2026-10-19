@@ -24,16 +24,39 @@
 
         <!-- Always-on status strip: next scheduled gong + which PC currently hosts the broker.
              Test mode is no longer shown here — it moved into the Settings "Gefahrenzone",
-             alongside Test-Gong, since it doesn't need to be permanently visible. -->
-        <Border Grid.Row="0"
-                Padding="16,10"
-                CornerRadius="6"
-                Background="{StaticResource StatusBannerBrush}">
-            <TextBlock FontWeight="Bold"
-                       FontSize="16"
-                       Foreground="White"
-                       Text="{x:Bind ViewModel.StatusBannerText, Mode=OneWay}" />
-        </Border>
+             alongside Test-Gong, since it doesn't need to be permanently visible.
+             Update-available notice (added 2026-10-19) stacked right below it — kept inside the
+             same Grid.Row cell instead of adding a new row, so nothing else's Grid.Row index
+             needed to change. Severity (Informational/Warning/Error) follows UpdateUrgency, see
+             MainViewModel.ApplyUpdateResult; never shown for a Mandatory update — that case is
+             handled before this window even loads, see App.xaml.cs / UpdateRequiredWindow. -->
+        <StackPanel Grid.Row="0" Spacing="8">
+            <Border Padding="16,10"
+                    CornerRadius="6"
+                    Background="{StaticResource StatusBannerBrush}">
+                <TextBlock FontWeight="Bold"
+                           FontSize="16"
+                           Foreground="White"
+                           Text="{x:Bind ViewModel.StatusBannerText, Mode=OneWay}" />
+            </Border>
+            <InfoBar IsOpen="{x:Bind ViewModel.UpdateBannerIsOpen, Mode=TwoWay}"
+                     Severity="{x:Bind ViewModel.UpdateBannerSeverity, Mode=OneWay}"
+                     Title="Update"
+                     Message="{x:Bind ViewModel.UpdateBannerMessage, Mode=OneWay}" />
+        </StackPanel>
+
+        <!-- Current version, small/grey/unobtrusive, bottom-right of the whole window (the
+             maintainer's request 2026-10-19) — overlays every row rather than living in one, so
+             it always sits in the window's actual bottom-right corner regardless of how much
+             room content there is. Tap re-runs the check (OnVersionTextTapped). -->
+        <TextBlock Grid.RowSpan="4"
+                   Text="{x:Bind ViewModel.CurrentVersionText, Mode=OneWay}"
+                   FontSize="11"
+                   Foreground="Gray"
+                   HorizontalAlignment="Right"
+                   VerticalAlignment="Bottom"
+                   Margin="0,0,4,2"
+                   Tapped="OnVersionTextTapped" />
 
         <Grid Grid.Row="1" ColumnSpacing="16">
             <Grid.ColumnDefinitions>
@@ -92,12 +115,15 @@
                             </Grid.RowDefinitions>
 
                             <!-- The room's own outline — purely decorative background, spans both
-                                 rows so header and device grid both visually sit "inside" it. -->
+                                 rows so header and device grid both visually sit "inside" it.
+                                 Explicit high-contrast CAD/blueprint-style colors (RoomOutlineBrush/
+                                 RoomFillBrush in App.xaml), not themed Card brushes — see the
+                                 comment there for why. -->
                             <Polygon Grid.RowSpan="2"
                                      Points="{x:Bind OutlinePoints, Mode=OneWay}"
-                                     Fill="{ThemeResource CardBackgroundFillColorDefaultBrush}"
-                                     Stroke="{ThemeResource CardStrokeColorDefaultBrush}"
-                                     StrokeThickness="2" />
+                                     Fill="{StaticResource RoomFillBrush}"
+                                     Stroke="{StaticResource RoomOutlineBrush}"
+                                     StrokeThickness="1.5" />
 
                             <Grid Grid.Row="0" ColumnSpacing="4" Margin="{x:Bind HeaderMargin, Mode=OneWay}">
                                 <Grid.ColumnDefinitions>
@@ -105,6 +131,7 @@
                                     <ColumnDefinition Width="Auto" />
                                 </Grid.ColumnDefinitions>
                                 <TextBlock Grid.Column="0" Text="{x:Bind Name, Mode=OneWay}" FontWeight="SemiBold"
+                                           FontFamily="Consolas" Foreground="{StaticResource RoomOutlineBrush}"
                                            VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
                                 <Button Grid.Column="1" Content="✕" Padding="6,2" Tag="{x:Bind}" Click="OnDeleteRoomClicked"
                                         Visibility="{x:Bind DeleteButtonVisibility}" ToolTipService.ToolTip="Raum löschen" />
@@ -127,11 +154,14 @@
                                       Background="Transparent">
                                 <GridView.ItemTemplate>
                                     <DataTemplate x:DataType="vm:NodeListItem">
-                                        <Border Background="{ThemeResource CardStrokeColorDefaultBrush}"
-                                                CornerRadius="4"
+                                        <Border Background="Transparent"
+                                                BorderBrush="{StaticResource RoomDeviceChipBrush}"
+                                                BorderThickness="1"
+                                                CornerRadius="2"
                                                 Padding="8,4"
                                                 Margin="2">
-                                            <TextBlock Text="{x:Bind DisplayLabel, Mode=OneWay}" FontSize="12" />
+                                            <TextBlock Text="{x:Bind DisplayLabel, Mode=OneWay}" FontFamily="Consolas"
+                                                       Foreground="{StaticResource RoomOutlineBrush}" FontSize="12" />
                                         </Border>
                                     </DataTemplate>
                                 </GridView.ItemTemplate>

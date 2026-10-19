@@ -17,6 +17,11 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <ApplicationIcon>Assets\Logo.ico</ApplicationIcon>
+    <!-- Single source of truth for the running app's own version (read via
+         Assembly.GetExecutingAssembly().GetName().Version in App.xaml.cs for the update check).
+         Must be bumped together with /version.json at the repo root on every release that
+         changes behavior — see HANDOFF.md "Update notification system". -->
+    <Version>1.0.0</Version>
   </PropertyGroup>
 
   <ItemGroup>

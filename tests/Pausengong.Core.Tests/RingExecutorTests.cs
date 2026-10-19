@@ -34,6 +34,8 @@ public class RingExecutorTests : IDisposable
             WasCalled = true;
             return Task.CompletedTask;
         }
+
+        public Task ShowSimpleNotificationAsync(string title, string message, CancellationToken ct = default) => Task.CompletedTask;
     }
 
     private async Task<ConfigStore> CreateStoreWithTestModeAsync(bool testModeActive)

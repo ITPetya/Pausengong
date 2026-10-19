@@ -16,4 +16,14 @@ public sealed class ToastService : IToastService
         AppNotificationManager.Default.Show(builder.BuildNotification());
         return Task.CompletedTask;
     }
+
+    public Task ShowSimpleNotificationAsync(string title, string message, CancellationToken ct = default)
+    {
+        var builder = new AppNotificationBuilder()
+            .AddText(title)
+            .AddText(message);
+
+        AppNotificationManager.Default.Show(builder.BuildNotification());
+        return Task.CompletedTask;
+    }
 }

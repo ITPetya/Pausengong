@@ -1,4 +1,6 @@
 using System.IO;
+using System.Net.Http;
+using System.Reflection;
 using System.Threading;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.UI.Xaml;
@@ -11,12 +13,18 @@ using Pausengong.Core.Election.Discovery;
 using Pausengong.Core.Mqtt;
 using Pausengong.Core.Presence;
 using Pausengong.Core.Scheduling;
+using Pausengong.Core.Updates;
 
 namespace Pausengong.App;
 
 public partial class App : Application
 {
     public const int MqttPort = 18830;
+
+    // Raw-content URL for the repo's version.json — see HttpUpdateManifestFetcher and
+    // HANDOFF.md "Update notification system". Public file, no auth needed.
+    private static readonly Uri VersionManifestUrl =
+        new("https://raw.githubusercontent.com/ITPetya/Pausengong/master/version.json");
 
     // Two Pausengong processes on the same PC would both try to bind the same discovery/MQTT
     // ports and silently fail (see: the exact bug this fixes — a second launch got stuck on
@@ -25,7 +33,7 @@ public partial class App : Application
     private const string SingleInstanceMutexName = "Global\\Pausengong.SingleInstance";
     private static Mutex? _singleInstanceMutex;
 
-    private MainWindow? _window;
+    private Window? _window;
 
     public IServiceProvider Services { get; } = null!;
 
@@ -51,9 +59,45 @@ public partial class App : Application
     protected override void OnLaunched(LaunchActivatedEventArgs args)
     {
         AppNotificationManager.Default.Register();
+        _ = LaunchAsync();
+    }
 
-        _window = new MainWindow(Services);
-        _window.Activate();
+    /// <summary>
+    /// Runs the update check BEFORE any window is shown — a <see cref="UpdateUrgency.Mandatory"/>
+    /// result (compatibility/reliability at risk on this version) shows only
+    /// <see cref="UpdateRequiredWindow"/> instead of <see cref="MainWindow"/>: no networking, no
+    /// MQTT, no scheduling loop starts, nothing beyond the update notice itself (the maintainer's
+    /// explicit requirement 2026-10-19: "das Programm soll auch nicht vollständig laden").
+    /// Everything else (no update / Informational / Important) loads completely normally — the
+    /// check result is just carried into <see cref="MainViewModel"/> to show as an InfoBar.
+    /// </summary>
+    private async Task LaunchAsync()
+    {
+        var updateService = Services.GetRequiredService<UpdateService>();
+        var currentVersion = Assembly.GetExecutingAssembly().GetName().Version ?? new Version(0, 0, 0);
+
+        UpdateCheckResult updateResult;
+        try
+        {
+            updateResult = await updateService.CheckAsync(currentVersion);
+        }
+        catch
+        {
+            // One more defensive layer around the startup gate itself, on top of UpdateService's
+            // own fail-open contract — a failed check here must never be able to block startup.
+            updateResult = UpdateCheckResult.UpToDate;
+        }
+
+        if (updateResult is { IsUpdateAvailable: true, Urgency: UpdateUrgency.Mandatory })
+        {
+            _window = new UpdateRequiredWindow(updateResult);
+            _window.Activate();
+            return;
+        }
+
+        var mainWindow = new MainWindow(Services, updateResult);
+        _window = mainWindow;
+        mainWindow.Activate();
     }
 
     /// <summary>
@@ -98,6 +142,11 @@ public partial class App : Application
         services.AddSingleton<ConfigSyncService>();
         services.AddSingleton<NodePresenceService>();
         services.AddSingleton<RingCoordinatorService>();
+
+        services.AddSingleton<HttpClient>();
+        services.AddSingleton<IUpdateManifestFetcher>(sp =>
+            new HttpUpdateManifestFetcher(sp.GetRequiredService<HttpClient>(), VersionManifestUrl));
+        services.AddSingleton<UpdateService>();
 
         return services.BuildServiceProvider();
     }
