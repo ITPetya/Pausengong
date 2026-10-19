@@ -3,11 +3,14 @@ using Pausengong.Core.Models;
 namespace Pausengong.Core.Neighbors;
 
 /// <summary>
-/// Turns raw per-node BLE observations into a symmetric adjacency structure. Pure and stateless
-/// — see HANDOFF.md "Phase 7 replacement: BLE neighborhood clustering", step 4 (Aggregation).
-/// BLE RSSI isn't perfectly symmetric A→B vs. B→A (radio/antenna differences), so where both
-/// directions are known they're averaged; a one-directional-only observation is kept but flagged
-/// as weaker/provisional evidence via <see cref="NeighborEdge.IsBidirectional"/>.
+/// Turns raw per-node proximity observations into a symmetric adjacency structure. Pure and
+/// stateless, shared by both room-detection tracks — see HANDOFF.md "Phase 7 replacement: BLE
+/// neighborhood clustering" (step 4, Aggregation) and "Track B: ultrasonic presence sensing".
+/// A one-way-only reading isn't perfectly symmetric A→B vs. B→A (BLE: radio/antenna differences;
+/// ultrasonic: speaker/mic differences), so where both directions are known they're averaged; a
+/// one-directional-only observation is kept but flagged as weaker/provisional evidence via
+/// <see cref="NeighborEdge.IsBidirectional"/>. Call this once per track — never pass BLE and
+/// ultrasonic reports into the same call, their signal units aren't comparable.
 /// </summary>
 public static class NeighborGraphBuilder
 {
@@ -18,7 +21,7 @@ public static class NeighborGraphBuilder
         var directed = new Dictionary<(string From, string To), double>();
         foreach (var report in reports)
         {
-            foreach (var (observedNodeId, rssi) in report.ObservedRssiByNodeId)
+            foreach (var (observedNodeId, rssi) in report.ObservedSignalByNodeId)
             {
                 directed[(report.ObserverNodeId, observedNodeId)] = rssi;
             }

@@ -18,7 +18,7 @@ public class NeighborGraphBuilderTests
         var edges = NeighborGraphBuilder.BuildEdges(reports);
 
         var edge = Assert.Single(edges);
-        Assert.Equal(-65, edge.SymmetrizedRssi);
+        Assert.Equal(-65, edge.SymmetrizedSignal);
         Assert.True(edge.IsBidirectional);
     }
 
@@ -33,7 +33,7 @@ public class NeighborGraphBuilderTests
         var edges = NeighborGraphBuilder.BuildEdges(reports);
 
         var edge = Assert.Single(edges);
-        Assert.Equal(-60, edge.SymmetrizedRssi);
+        Assert.Equal(-60, edge.SymmetrizedSignal);
         Assert.False(edge.IsBidirectional);
     }
 

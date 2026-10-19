@@ -16,7 +16,7 @@ public class ClusterCalculatorTests
             new NeighborEdge("b", "c", -55, IsBidirectional: true),
         };
 
-        var clusters = ClusterCalculator.Cluster(nodes, edges, thresholdRssiDbm: -70);
+        var clusters = ClusterCalculator.Cluster(nodes, edges, threshold: -70);
 
         var cluster = Assert.Single(clusters);
         Assert.Equal(nodes.OrderBy(x => x), cluster.OrderBy(x => x));
@@ -28,7 +28,7 @@ public class ClusterCalculatorTests
         var nodes = new[] { "a", "b" };
         var edges = new[] { new NeighborEdge("a", "b", -85, IsBidirectional: true) };
 
-        var clusters = ClusterCalculator.Cluster(nodes, edges, thresholdRssiDbm: -70);
+        var clusters = ClusterCalculator.Cluster(nodes, edges, threshold: -70);
 
         Assert.Equal(2, clusters.Count);
         Assert.All(clusters, c => Assert.Single(c));
@@ -40,7 +40,7 @@ public class ClusterCalculatorTests
         var nodes = new[] { "a", "b" };
         var edges = new[] { new NeighborEdge("a", "b", -70, IsBidirectional: true) };
 
-        var clusters = ClusterCalculator.Cluster(nodes, edges, thresholdRssiDbm: -70);
+        var clusters = ClusterCalculator.Cluster(nodes, edges, threshold: -70);
 
         Assert.Single(clusters);
     }
@@ -56,7 +56,7 @@ public class ClusterCalculatorTests
             new NeighborEdge("b", "c", -50, IsBidirectional: true),
         };
 
-        var clusters = ClusterCalculator.Cluster(nodes, edges, thresholdRssiDbm: -70);
+        var clusters = ClusterCalculator.Cluster(nodes, edges, threshold: -70);
 
         Assert.Single(clusters);
     }
@@ -71,7 +71,7 @@ public class ClusterCalculatorTests
             new NeighborEdge("c", "d", -50, IsBidirectional: true),
         };
 
-        var clusters = ClusterCalculator.Cluster(nodes, edges, thresholdRssiDbm: -70);
+        var clusters = ClusterCalculator.Cluster(nodes, edges, threshold: -70);
 
         Assert.Equal(2, clusters.Count);
         Assert.Contains(clusters, c => c.OrderBy(x => x).SequenceEqual(new[] { "a", "b" }));
@@ -83,7 +83,7 @@ public class ClusterCalculatorTests
     {
         var nodes = new[] { "a", "b", "c" };
 
-        var clusters = ClusterCalculator.Cluster(nodes, Array.Empty<NeighborEdge>(), thresholdRssiDbm: -70);
+        var clusters = ClusterCalculator.Cluster(nodes, Array.Empty<NeighborEdge>(), threshold: -70);
 
         Assert.Equal(3, clusters.Count);
         Assert.All(clusters, c => Assert.Single(c));

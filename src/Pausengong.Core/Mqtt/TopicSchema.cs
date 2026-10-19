@@ -12,9 +12,20 @@ public static class TopicSchema
     /// by every node (see Neighbors/ — BLE neighborhood clustering, HANDOFF.md "Phase 7 replacement").</summary>
     public static string NodeBleNeighbors(string nodeId) => $"{Root}/nodes/{nodeId}/ble-neighbors";
 
+    /// <summary>Non-retained per-node smoothed ultrasonic-amplitude-to-neighbors map, same shape
+    /// and cadence as <see cref="NodeBleNeighbors"/> but for Track B (see HANDOFF.md "Track B:
+    /// ultrasonic presence sensing"). Never aggregated together with the BLE topic.</summary>
+    public static string NodeUltrasonicNeighbors(string nodeId) => $"{Root}/nodes/{nodeId}/ultrasonic-neighbors";
+
     public const string NodeStatusWildcard = $"{Root}/nodes/+/status";
     public const string NodeOnlineWildcard = $"{Root}/nodes/+/online";
     public const string NodeBleNeighborsWildcard = $"{Root}/nodes/+/ble-neighbors";
+    public const string NodeUltrasonicNeighborsWildcard = $"{Root}/nodes/+/ultrasonic-neighbors";
+
+    /// <summary>Non-retained, Chef-published round-robin transmit schedule for Track B (ultrasonic
+    /// presence sensing) — every node needs this to know when it's its own turn to chirp vs.
+    /// everyone else's turn to listen. See HANDOFF.md "Track B", step 2 (collision handling).</summary>
+    public const string UltrasonicSchedule = $"{Root}/ultrasonic/schedule";
 
     /// <summary>Pulls the <c>{nodeId}</c> segment out of any <c>pausengong/nodes/{nodeId}/...</c> topic.</summary>
     public static string? ParseNodeIdFromNodesTopic(string topic)
