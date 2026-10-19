@@ -1,0 +1,50 @@
+name: Build Windows exe
+
+# Builds the single self-contained Pausengong.App.exe on a real Windows runner (this project
+# cannot be built or even cross-compiled on Linux, see HANDOFF.md "Room floor-plan visualization"
+# / Verification status). Every push to master gets its own downloadable artifact, and the
+# "dev-latest" release always points at the newest build for a stable download link.
+
+on:
+  push:
+    branches: [ master ]
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET 8 SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Run test suite
+        run: dotnet test tests/Pausengong.Core.Tests/Pausengong.Core.Tests.csproj -c Release
+
+      - name: Publish self-contained single-file exe
+        shell: pwsh
+        run: ./packaging/publish.ps1
+
+      - name: Upload exe as a build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Pausengong-exe
+          path: publish/Pausengong.App.exe
+          if-no-files-found: error
+
+      - name: Update "dev-latest" release with the newest exe
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: dev-latest
+          name: Dev build (latest master)
+          body: |
+            Automatically built from the latest commit on master. Not a stable release —
+            unverified feature state, see HANDOFF.md for what's actually done vs. planned.
+          prerelease: true
+          files: publish/Pausengong.App.exe
