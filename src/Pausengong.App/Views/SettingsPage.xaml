@@ -1,0 +1,86 @@
+<Page
+    x:Class="Pausengong.App.SettingsPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+>
+
+    <Grid Padding="20" RowSpacing="16">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <StackPanel Grid.Row="0" Spacing="8">
+            <TextBlock Text="Audioausgabe" FontWeight="SemiBold" />
+            <TextBlock Text="Nur auf diesem PC gültig — jeder Rechner behält sein eigenes Ausgabegerät."
+                       TextWrapping="Wrap" Opacity="0.75" />
+            <ComboBox ItemsSource="{x:Bind ViewModel.AudioOutputDevices, Mode=OneWay}"
+                      SelectedItem="{x:Bind ViewModel.SelectedAudioOutputDevice, Mode=TwoWay}"
+                      DisplayMemberPath="Name"
+                      PlaceholderText="Standardgerät des Systems"
+                      HorizontalAlignment="Left"
+                      MinWidth="280" />
+        </StackPanel>
+
+        <StackPanel Grid.Row="1" Spacing="8">
+            <TextBlock Text="Pausenzeiten" FontWeight="SemiBold" />
+            <StackPanel Orientation="Horizontal" Spacing="8">
+                <TimePicker x:Name="NewBreakTimePicker" ClockIdentifier="24HourClock" />
+                <Button Content="Hinzufügen" Click="OnAddBreakTimeClicked" />
+            </StackPanel>
+        </StackPanel>
+
+        <StackPanel Grid.Row="2" Spacing="8" MaxWidth="320" HorizontalAlignment="Left">
+            <ListView x:Name="BreakTimesList" ItemsSource="{x:Bind ViewModel.BreakTimes, Mode=OneWay}" SelectionMode="Single" />
+            <Button Content="Ausgewählte Zeit entfernen" Click="OnRemoveBreakTimeClicked" />
+        </StackPanel>
+
+        <!-- Danger zone: everything here either turns off the real-audio safety net (Testmodus)
+             or plays a real sound on demand (Test-Gong) — grouped and pushed to the bottom so
+             it's not the first thing anyone sees, but still unmistakable when they get here. -->
+        <Border Grid.Row="4"
+                Padding="16"
+                CornerRadius="6"
+                BorderBrush="{StaticResource DangerZoneBorderBrush}"
+                BorderThickness="1"
+                Background="{StaticResource DangerZoneBackgroundBrush}">
+            <StackPanel Spacing="12">
+                <TextBlock Text="⚠ Gefahrenzone" FontWeight="Bold" Foreground="{StaticResource DangerZoneBorderBrush}" />
+
+                <!-- Must stay unmistakable that turning this off means a real gong will play. -->
+                <Border Padding="16,10"
+                        CornerRadius="6"
+                        Background="{x:Bind ViewModel.TestModeActive, Mode=OneWay, Converter={StaticResource TestModeToBrushConverter}}">
+                    <Grid ColumnSpacing="16">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Grid.Column="0"
+                                   VerticalAlignment="Center"
+                                   FontWeight="Bold"
+                                   FontSize="16"
+                                   Foreground="White"
+                                   Text="{x:Bind ViewModel.TestModeActive, Mode=OneWay, Converter={StaticResource TestModeToTextConverter}}" />
+                        <ToggleSwitch Grid.Column="1"
+                                      IsOn="{x:Bind ViewModel.TestModeActive, Mode=TwoWay}"
+                                      OnContent="Testmodus"
+                                      OffContent="Testmodus" />
+                    </Grid>
+                </Border>
+
+                <StackPanel Spacing="8">
+                    <TextBlock Text="Test-Gong" FontWeight="SemiBold" />
+                    <TextBlock Text="Spielt sofort einen echten Ton auf diesem PC ab — unabhängig vom Testmodus. Damit lässt sich pruefen, ob Audio und Lautstärke korrekt eingestellt sind."
+                               TextWrapping="Wrap" Opacity="0.75" />
+                    <Button Content="Test-Gong abspielen"
+                            Command="{x:Bind ViewModel.TestGongCommand}"
+                            IsEnabled="{x:Bind ViewModel.IsTestGongPlaying, Mode=OneWay, Converter={StaticResource InverseBoolConverter}}" />
+                </StackPanel>
+            </StackPanel>
+        </Border>
+    </Grid>
+</Page>

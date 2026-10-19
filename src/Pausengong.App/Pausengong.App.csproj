@@ -1,0 +1,50 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows10.0.19041.0</TargetFramework>
+    <TargetPlatformMinVersion>10.0.17763.0</TargetPlatformMinVersion>
+    <RootNamespace>Pausengong.App</RootNamespace>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <Platforms>x64</Platforms>
+    <RuntimeIdentifiers>win-x64</RuntimeIdentifiers>
+    <UseWinUI>true</UseWinUI>
+    <EnableMsixTooling>true</EnableMsixTooling>
+    <WindowsPackageType>None</WindowsPackageType>
+    <WindowsAppSDKSelfContained>true</WindowsAppSDKSelfContained>
+    <SelfContained>true</SelfContained>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <ApplicationIcon>Assets\Logo.ico</ApplicationIcon>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.WindowsAppSDK" Version="1.8.260804001" />
+    <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.0" />
+    <PackageReference Include="H.NotifyIcon.WinUI" Version="2.3.2" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="8.0.1" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Pausengong.Core\Pausengong.Core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Embedded (not Content) so these genuinely ship inside the one exe — PublishSingleFile
+         was found to silently drop loose Content files from the publish output. -->
+    <EmbeddedResource Include="Assets\gong.wav">
+      <LogicalName>Pausengong.Assets.gong.wav</LogicalName>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Assets\Logo.ico">
+      <LogicalName>Pausengong.Assets.Logo.ico</LogicalName>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Assets\Logo-256.png">
+      <LogicalName>Pausengong.Assets.Logo-256.png</LogicalName>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Assets\Logo-44.png">
+      <LogicalName>Pausengong.Assets.Logo-44.png</LogicalName>
+    </EmbeddedResource>
+  </ItemGroup>
+
+</Project>
