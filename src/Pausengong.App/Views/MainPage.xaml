@@ -58,47 +58,88 @@
             <Button Content="Raum hinzufügen" Click="OnAddRoomClicked" />
         </StackPanel>
 
-        <!-- No separate "unassigned" list any more: every node that isn't in a custom room lives
-             in "Standardraum", the always-present first room card below. -->
-        <ItemsControl Grid.Row="3" ItemsSource="{x:Bind ViewModel.Rooms, Mode=OneWay}">
-            <ItemsControl.ItemsPanel>
-                <ItemsPanelTemplate>
-                    <StackPanel Orientation="Horizontal" Spacing="12" />
-                </ItemsPanelTemplate>
-            </ItemsControl.ItemsPanel>
-            <ItemsControl.ItemTemplate>
-                <DataTemplate x:DataType="vm:RoomViewModel">
-                    <StackPanel Width="200" Spacing="6">
-                        <Grid ColumnSpacing="4">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*" />
-                                <ColumnDefinition Width="Auto" />
-                            </Grid.ColumnDefinitions>
-                            <TextBlock Grid.Column="0" Text="{x:Bind Name, Mode=OneWay}" FontWeight="SemiBold" VerticalAlignment="Center" />
-                            <Button Grid.Column="1" Content="✕" Padding="6,2" Tag="{x:Bind}" Click="OnDeleteRoomClicked"
-                                    Visibility="{x:Bind DeleteButtonVisibility}" ToolTipService.ToolTip="Raum löschen" />
+        <!-- Room "floor plan" visualization (replaced the plain rectangular card list
+             2026-10-19): each room is drawn as one of a fixed set of hand-designed outlines
+             (RoomShapeTemplates — rectangle, L-shape, notched corners, outward bumps, ...),
+             picked deterministically per room so it keeps the same look across restarts, and
+             grows as more devices land in it (RoomViewModel.Size). No separate "unassigned"
+             list: every node that isn't in a custom room lives in "Standardraum", the
+             always-present first room shape below.
+
+             Drag/drop still targets the room's rectangular bounding box (the GridView below),
+             not a pixel-perfect hit test against the drawn polygon outline — the outline is
+             visual flavor, not the actual drop-target shape. That's a deliberate, disclosed
+             simplification: true per-pixel polygon hit-testing isn't something WinUI3 supports
+             out of the box, and this project has no way to visually verify custom hit-testing
+             code anyway (no Windows in the tool environment this was written in). -->
+        <ScrollViewer Grid.Row="3"
+                      HorizontalScrollMode="Enabled"
+                      HorizontalScrollBarVisibility="Auto"
+                      VerticalScrollMode="Disabled"
+                      VerticalScrollBarVisibility="Disabled">
+            <ItemsControl ItemsSource="{x:Bind ViewModel.Rooms, Mode=OneWay}">
+                <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate>
+                        <StackPanel Orientation="Horizontal" Spacing="20" VerticalAlignment="Bottom" />
+                    </ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="vm:RoomViewModel">
+                        <Grid Width="{x:Bind GridWidth, Mode=OneWay}" Height="{x:Bind GridHeight, Mode=OneWay}">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="*" />
+                            </Grid.RowDefinitions>
+
+                            <!-- The room's own outline — purely decorative background, spans both
+                                 rows so header and device grid both visually sit "inside" it. -->
+                            <Polygon Grid.RowSpan="2"
+                                     Points="{x:Bind OutlinePoints, Mode=OneWay}"
+                                     Fill="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                                     Stroke="{ThemeResource CardStrokeColorDefaultBrush}"
+                                     StrokeThickness="2" />
+
+                            <Grid Grid.Row="0" ColumnSpacing="4" Margin="{x:Bind HeaderMargin, Mode=OneWay}">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Grid.Column="0" Text="{x:Bind Name, Mode=OneWay}" FontWeight="SemiBold"
+                                           VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                                <Button Grid.Column="1" Content="✕" Padding="6,2" Tag="{x:Bind}" Click="OnDeleteRoomClicked"
+                                        Visibility="{x:Bind DeleteButtonVisibility}" ToolTipService.ToolTip="Raum löschen" />
+                            </Grid>
+
+                            <!-- The actual drop target (see the note above the ScrollViewer) — a
+                                 GridView so devices auto-wrap into a grid instead of one column,
+                                 same drag/drop handlers as the old ListView (GridView shares the
+                                 ListViewBase base class, see OnRoomDrop's cast). -->
+                            <GridView Grid.Row="1"
+                                      ItemsSource="{x:Bind Nodes, Mode=OneWay}"
+                                      Margin="{x:Bind DeviceAreaMargin, Mode=OneWay}"
+                                      SelectionMode="None"
+                                      CanDragItems="True"
+                                      AllowDrop="True"
+                                      DragItemsStarting="OnNodeDragItemsStarting"
+                                      Drop="OnRoomDrop"
+                                      DragOver="OnListDragOver"
+                                      Tag="{x:Bind}"
+                                      Background="Transparent">
+                                <GridView.ItemTemplate>
+                                    <DataTemplate x:DataType="vm:NodeListItem">
+                                        <Border Background="{ThemeResource CardStrokeColorDefaultBrush}"
+                                                CornerRadius="4"
+                                                Padding="8,4"
+                                                Margin="2">
+                                            <TextBlock Text="{x:Bind DisplayLabel, Mode=OneWay}" FontSize="12" />
+                                        </Border>
+                                    </DataTemplate>
+                                </GridView.ItemTemplate>
+                            </GridView>
                         </Grid>
-                        <ListView ItemsSource="{x:Bind Nodes, Mode=OneWay}"
-                                  CanDragItems="True"
-                                  AllowDrop="True"
-                                  DragItemsStarting="OnNodeDragItemsStarting"
-                                  Drop="OnRoomDrop"
-                                  DragOver="OnListDragOver"
-                                  Tag="{x:Bind}"
-                                  MinHeight="120"
-                                  BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
-                                  BorderThickness="1"
-                                  CornerRadius="4"
-                                  Padding="4">
-                            <ListView.ItemTemplate>
-                                <DataTemplate x:DataType="vm:NodeListItem">
-                                    <TextBlock Text="{x:Bind DisplayLabel, Mode=OneWay}" />
-                                </DataTemplate>
-                            </ListView.ItemTemplate>
-                        </ListView>
-                    </StackPanel>
-                </DataTemplate>
-            </ItemsControl.ItemTemplate>
-        </ItemsControl>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+        </ScrollViewer>
     </Grid>
 </Page>

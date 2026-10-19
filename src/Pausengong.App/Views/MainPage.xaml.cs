@@ -133,7 +133,11 @@ public sealed partial class MainPage : Page
         }
 
         var nodeId = await e.DataView.GetTextAsync();
-        var room = (ViewModels.RoomViewModel)((ListView)sender).Tag;
+        // ListViewBase, not ListView: the room's device grid is a GridView now (see
+        // MainPage.xaml, room visualization added 2026-10-19) — GridView and ListView share
+        // this base class and the same Drag/Drop event shapes, so this handler didn't otherwise
+        // need to change, just the cast.
+        var room = (ViewModels.RoomViewModel)((ListViewBase)sender).Tag;
         ViewModel.MoveNodeToRoom(nodeId, room);
     }
 }
