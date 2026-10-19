@@ -118,6 +118,15 @@ public sealed partial class MainPage : Page
         ViewModel.RemoveRoomCommand.Execute(room);
     }
 
+    // The delete "✕" only shows while hovering the room name itself (requested 2026-10-19) —
+    // RoomViewModel.IsHeaderHovered drives EffectiveDeleteButtonVisibility, which the button in
+    // MainPage.xaml binds to.
+    private void OnRoomLabelPointerEntered(object sender, Microsoft.UI.Xaml.Input.PointerRoutedEventArgs e) =>
+        ((ViewModels.RoomViewModel)((FrameworkElement)sender).Tag).IsHeaderHovered = true;
+
+    private void OnRoomLabelPointerExited(object sender, Microsoft.UI.Xaml.Input.PointerRoutedEventArgs e) =>
+        ((ViewModels.RoomViewModel)((FrameworkElement)sender).Tag).IsHeaderHovered = false;
+
     private void OnNodeDragItemsStarting(object sender, DragItemsStartingEventArgs e)
     {
         if (e.Items.Count > 0 && e.Items[0] is ViewModels.NodeListItem node)

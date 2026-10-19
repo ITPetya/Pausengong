@@ -29,6 +29,17 @@ public partial class RoomViewModel : ObservableObject
     /// <summary>Hides the "✕ Raum löschen" button for <see cref="IsDefaultRoom"/>.</summary>
     public Visibility DeleteButtonVisibility => IsDefaultRoom ? Visibility.Collapsed : Visibility.Visible;
 
+    /// <summary>Set from <c>MainPage.xaml.cs</c>'s PointerEntered/Exited on the room-name area
+    /// (requested 2026-10-19: the delete "✕" should only appear on hovering the name, not sit
+    /// there permanently). Combined with <see cref="DeleteButtonVisibility"/> below — a default
+    /// room is never deletable regardless of hover.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(EffectiveDeleteButtonVisibility))]
+    private bool _isHeaderHovered;
+
+    public Visibility EffectiveDeleteButtonVisibility =>
+        DeleteButtonVisibility == Visibility.Visible && IsHeaderHovered ? Visibility.Visible : Visibility.Collapsed;
+
     public ObservableCollection<NodeListItem> Nodes { get; } = new();
 
     /// <summary>This room's fixed floor-plan outline — picked once, deterministically, from
@@ -68,17 +79,14 @@ public partial class RoomViewModel : ObservableObject
     }
 
     /// <summary>
-    /// The content area (header + device grid) insets so it never overlaps any notch in
-    /// <see cref="Shape"/> — derived from <see cref="RoomShapeTemplate.ContentArea"/>, which
-    /// every template's own hand-verified comment (see <see cref="RoomShapeTemplates"/>)
-    /// guarantees clears every notch for that specific shape. Split into two margins rather than
-    /// one shared one: the header (Grid.Row 0) and device grid (Grid.Row 1) are two separate
-    /// rows stacked vertically, so applying the full top+bottom inset to both would double it up
-    /// vertically (safe, just needlessly cramped) — each row instead only carries the side of
-    /// the vertical inset that's actually its own edge; both still carry the full left/right
-    /// inset, since that one isn't shared between the two rows.
+    /// Inset so the device grid never overlaps any notch in <see cref="Shape"/> — derived from
+    /// <see cref="RoomShapeTemplate.ContentArea"/>, which every template's own hand-verified
+    /// comment (see <see cref="RoomShapeTemplates"/>) guarantees clears every notch for that
+    /// specific shape. A single margin now (simplified 2026-10-19 when the separate header row
+    /// was removed — the room name moved to a centered floor label instead, see MainPage.xaml):
+    /// there's only one content region left to inset, not two stacked rows to split it across.
     /// </summary>
-    public Thickness HeaderMargin
+    public Thickness ContentMargin
     {
         get
         {
@@ -86,19 +94,8 @@ public partial class RoomViewModel : ObservableObject
             var left = (area.X - Shape.MinX) * ScaleFactor;
             var top = (area.Y - Shape.MinY) * ScaleFactor;
             var right = (Shape.MaxX - (area.X + area.Width)) * ScaleFactor;
-            return new Thickness(left, top, right, 0);
-        }
-    }
-
-    public Thickness DeviceAreaMargin
-    {
-        get
-        {
-            var area = Shape.ContentArea;
-            var left = (area.X - Shape.MinX) * ScaleFactor;
-            var right = (Shape.MaxX - (area.X + area.Width)) * ScaleFactor;
             var bottom = (Shape.MaxY - (area.Y + area.Height)) * ScaleFactor;
-            return new Thickness(left, 0, right, bottom);
+            return new Thickness(left, top, right, bottom);
         }
     }
 
@@ -116,8 +113,7 @@ public partial class RoomViewModel : ObservableObject
             OnPropertyChanged(nameof(GridWidth));
             OnPropertyChanged(nameof(GridHeight));
             OnPropertyChanged(nameof(OutlinePoints));
-            OnPropertyChanged(nameof(HeaderMargin));
-            OnPropertyChanged(nameof(DeviceAreaMargin));
+            OnPropertyChanged(nameof(ContentMargin));
         };
     }
 
