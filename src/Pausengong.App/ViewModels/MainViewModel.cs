@@ -62,20 +62,35 @@ public partial class MainViewModel : ObservableObject
     private string _currentHostLabel = "wird ermittelt …";
     private DispatcherQueueTimer? _bannerTimer;
 
-    // Rooms per row in the "building" layout (requested 2026-10-19: "wie ein zusammenhängendes
-    // Gebäude mit mehreren Räumen", not one long strip side by side) — see RoomRows below.
-    // Arbitrary, adjustable: nobody has seen this on screen to tune it against a real room count.
-    private const int LayoutColumns = 2;
+    // "Building" layout (requested 2026-10-19: "wie ein zusammenhängendes Gebäude... rundrum um
+    // Räume erweitert", confirmed explicitly over a simpler row-grid alternative after that grid
+    // turned out to look identical to the old single-strip layout for the maintainer's actual
+    // 1-2-room test case): rooms spiral out around the first one — see RebuildRoomLayout/
+    // SpiralPositions below. Each room occupies one fixed-size cell in an infinite grid; the cell
+    // is bigger than MaxSize (RoomViewModel) specifically so a room's own size changing never
+    // requires repacking neighbors — only Rooms.Count changing (add/remove) does.
+    private const double LayoutCellSize = 580;
+    private const double LayoutDoorInset = 30;
+    private const double LayoutDoorSize = 20;
 
     public ObservableCollection<RoomViewModel> Rooms { get; } = new();
 
-    /// <summary>Rooms grouped into rows of <see cref="LayoutColumns"/> for MainPage.xaml's
-    /// nested-<c>ItemsControl</c> layout — rebuilt wholesale on every <see cref="Rooms"/> change
-    /// (add/remove/clear all route through the one <see cref="ObservableCollection{T}.CollectionChanged"/>
-    /// subscription in the constructor). A plain rebuild, not an incremental update: room counts
-    /// here are small (an office/school's worth of rooms), so this is cheap enough to not be
-    /// worth the extra complexity of patching it in place.</summary>
-    public ObservableCollection<RoomRow> RoomRows { get; } = new();
+    /// <summary>One entry per room with its spiral position — rebuilt wholesale on every
+    /// <see cref="Rooms"/> change (add/remove/clear all route through the one
+    /// <see cref="ObservableCollection{T}.CollectionChanged"/> subscription in the constructor).
+    /// A plain rebuild, not an incremental update: room counts here are small (an office/school's
+    /// worth of rooms), so this is cheap enough to not be worth patching in place.</summary>
+    public ObservableCollection<RoomLayoutEntry> RoomLayout { get; } = new();
+
+    /// <summary>Explicit size for the <c>Canvas</c> hosting <see cref="RoomLayout"/> in
+    /// MainPage.xaml — a <c>Canvas</c> does not auto-size to children positioned via
+    /// <c>Canvas.Left</c>/<c>Canvas.Top</c>, so without this the surrounding
+    /// <c>ScrollViewer</c> would have no idea how much there is to scroll to.</summary>
+    [ObservableProperty]
+    private double _roomLayoutCanvasWidth;
+
+    [ObservableProperty]
+    private double _roomLayoutCanvasHeight;
 
     public MainViewModel(
         ConfigStore configStore,
@@ -97,7 +112,7 @@ public partial class MainViewModel : ObservableObject
         _configStore.ConfigChanged += OnConfigChanged;
         _nodePresence.NodesChanged += OnPresenceNodesChanged;
         _ringCoordinator.DrawPreviewChanged += OnDrawPreviewChanged;
-        Rooms.CollectionChanged += (_, _) => RebuildRoomRows();
+        Rooms.CollectionChanged += (_, _) => RebuildRoomLayout();
 
         _currentVersion = Assembly.GetExecutingAssembly().GetName().Version ?? new Version(0, 0, 0);
         CurrentVersionText = "v" + _currentVersion.ToString(3);
@@ -271,16 +286,114 @@ public partial class MainViewModel : ObservableObject
         }
     }
 
-    private void RebuildRoomRows()
+    /// <summary>
+    /// Rebuilds <see cref="RoomLayout"/>: spiral grid positions for <see cref="SpiralPositions"/>,
+    /// converted to pixels, plus a connection-door marker to the next room (geometrically
+    /// adjacent by construction — <see cref="SpiralPositions"/> only ever steps exactly one cell
+    /// in one of the four cardinal directions, so <c>(next.x - cur.x, next.y - cur.y)</c> is
+    /// always one of (1,0)/(-1,0)/(0,1)/(0,-1), never a diagonal jump or anything larger).
+    /// </summary>
+    private void RebuildRoomLayout()
     {
-        RoomRows.Clear();
-        var rowCount = (int)Math.Ceiling(Rooms.Count / (double)LayoutColumns);
-        for (var i = 0; i < Rooms.Count; i += LayoutColumns)
+        RoomLayout.Clear();
+        if (Rooms.Count == 0)
         {
-            var rowRooms = Rooms.Skip(i).Take(LayoutColumns).ToList();
-            var isLastRow = (i / LayoutColumns) == rowCount - 1;
-            RoomRows.Add(new RoomRow(rowRooms, HasRowBelow: !isLastRow));
+            RoomLayoutCanvasWidth = 0;
+            RoomLayoutCanvasHeight = 0;
+            return;
         }
+
+        var cells = SpiralPositions(Rooms.Count);
+        var minX = cells.Min(c => c.X);
+        var maxX = cells.Max(c => c.X);
+        var minY = cells.Min(c => c.Y);
+        var maxY = cells.Max(c => c.Y);
+
+        for (var i = 0; i < Rooms.Count; i++)
+        {
+            var left = (cells[i].X - minX) * LayoutCellSize;
+            var top = (cells[i].Y - minY) * LayoutCellSize;
+
+            var hasDoor = i + 1 < Rooms.Count;
+            var doorLeft = 0.0;
+            var doorTop = 0.0;
+            if (hasDoor)
+            {
+                var dx = cells[i + 1].X - cells[i].X;
+                var dy = cells[i + 1].Y - cells[i].Y;
+
+                // Centered on whichever edge of this room's cell faces the next room. See the
+                // method doc above for why (dx, dy) is always exactly one of these four pairs,
+                // and HANDOFF.md "Room visualization: spiral layout" for the hand-worked proof
+                // that none of these four branches can ever produce a negative coordinate or one
+                // past the canvas's own computed width/height — not just assumed, actually
+                // checked, since this is the one thing in this whole visualization effort that's
+                // pure arithmetic and didn't need a screenshot to verify.
+                (doorLeft, doorTop) = (dx, dy) switch
+                {
+                    (1, 0) => (left + LayoutCellSize - LayoutDoorInset, top + (LayoutCellSize / 2) - (LayoutDoorSize / 2)),
+                    (-1, 0) => (left - LayoutDoorInset, top + (LayoutCellSize / 2) - (LayoutDoorSize / 2)),
+                    (0, 1) => (left + (LayoutCellSize / 2) - (LayoutDoorSize / 2), top + LayoutCellSize - LayoutDoorInset),
+                    (0, -1) => (left + (LayoutCellSize / 2) - (LayoutDoorSize / 2), top - LayoutDoorInset),
+                    _ => (left, top), // unreachable - see the method doc above
+                };
+            }
+
+            RoomLayout.Add(new RoomLayoutEntry(Rooms[i], left, top, doorLeft, doorTop, hasDoor));
+        }
+
+        RoomLayoutCanvasWidth = (maxX - minX + 1) * LayoutCellSize;
+        RoomLayoutCanvasHeight = (maxY - minY + 1) * LayoutCellSize;
+    }
+
+    /// <summary>
+    /// Grid cell (not pixel) coordinates for the first <paramref name="count"/> rooms in an
+    /// outward spiral starting at the origin — a classic "walk" spiral: step in the current
+    /// direction (right/down/left/up, in that cyclic order) for the current leg length, turn 90°
+    /// clockwise, and increase the leg length by one every second turn (1,1,2,2,3,3,4,4,...).
+    /// Hand-traced for count=9 while writing this (see HANDOFF.md "Room visualization: spiral
+    /// layout") and confirmed it fills a 3x3 grid around the origin exactly once with no gaps or
+    /// overlaps — the one piece of this whole visualization effort actually verified by working
+    /// through the arithmetic, not just reasoned about.
+    /// </summary>
+    private static List<(int X, int Y)> SpiralPositions(int count)
+    {
+        var positions = new List<(int X, int Y)> { (0, 0) };
+        if (count <= 1)
+        {
+            return positions;
+        }
+
+        var directions = new (int Dx, int Dy)[] { (1, 0), (0, 1), (-1, 0), (0, -1) };
+        var x = 0;
+        var y = 0;
+        var dirIndex = 0;
+        var stepsInCurrentLeg = 0;
+        var legLength = 1;
+        var legsCompletedAtThisLength = 0;
+
+        for (var i = 1; i < count; i++)
+        {
+            if (stepsInCurrentLeg == legLength)
+            {
+                dirIndex = (dirIndex + 1) % 4;
+                stepsInCurrentLeg = 0;
+                legsCompletedAtThisLength++;
+                if (legsCompletedAtThisLength == 2)
+                {
+                    legLength++;
+                    legsCompletedAtThisLength = 0;
+                }
+            }
+
+            var (dx, dy) = directions[dirIndex];
+            x += dx;
+            y += dy;
+            stepsInCurrentLeg++;
+            positions.Add((x, y));
+        }
+
+        return positions;
     }
 
     /// <summary>The always-present landing room — created on the fly if this is the very first
@@ -301,6 +414,19 @@ public partial class MainViewModel : ObservableObject
 
     /// <summary>Presence data changed — refresh display labels everywhere (a node's hostname/IP
     /// may have just arrived) and land any newly seen node in the default room.</summary>
+    /// <summary>Presence data changed — refresh display labels everywhere a BETTER one is
+    /// actually available, and land any newly seen node in the default room.
+    ///
+    /// Bug fixed 2026-10-19 (real report: "der alte PC... wird immer noch mit einer komischen
+    /// Nummer angezeigt"): this used to call <see cref="ResolveLabel"/> unconditionally for
+    /// every node in every room on every presence tick — including a node that just went
+    /// offline. <see cref="ResolveLabel"/> falls back to the raw <c>NodeId</c> (a GUID-looking
+    /// string — the "komische Nummer") once a node drops out of
+    /// <see cref="Presence.NodePresenceService.KnownNodes"/>, so a device's nice hostname label
+    /// was actively being *downgraded* to that raw id the moment it went offline, not just left
+    /// stale. Room membership itself is untouched here — an offline PC correctly keeps its room
+    /// assignment so it's still in the right place once it reconnects; only the DISPLAY LABEL is
+    /// now sticky, never regressing to something worse than what was already shown.</summary>
     private void OnPresenceNodesChanged()
     {
         _dispatcherQueue.TryEnqueue(() =>
@@ -309,7 +435,13 @@ public partial class MainViewModel : ObservableObject
             {
                 foreach (var node in room.Nodes)
                 {
-                    node.DisplayLabel = ResolveLabel(node.NodeId);
+                    var known = _nodePresence.KnownNodes.FirstOrDefault(n => n.NodeId == node.NodeId);
+                    if (known is not null)
+                    {
+                        node.DisplayLabel = known.DisplayLabel;
+                    }
+                    // else: no fresh info (node currently offline/unknown) - keep whatever label
+                    // is already shown rather than regress it to the raw node id.
                 }
             }
 

@@ -90,13 +90,6 @@
              separate "unassigned" list: every node that isn't in a custom room lives in
              "Standardraum", the always-present first room shape below.
 
-             VerticalAlignment="Top" on the room row (changed from "Bottom" 2026-10-19, the
-             maintainer's complaint about unused space above the rooms): Grid.Row="3" below is
-             "*" (fills all remaining height) so the rooms used to anchor to the very bottom of
-             the window, leaving a big gap between the toolbar and the rooms. Top-aligning the
-             row puts the rooms right under the toolbar instead; any truly extra window height
-             now shows up below the rooms, not above them.
-
              Drag/drop still targets the room's rectangular bounding box (the GridView below),
              not a pixel-perfect hit test against the drawn polygon outline — the outline is
              visual flavor, not the actual drop-target shape. That's a deliberate, disclosed
@@ -104,68 +97,83 @@
              out of the box, and this project has no way to visually verify custom hit-testing
              code anyway (no Windows in the tool environment this was written in).
 
-             Multi-row "building" layout (requested 2026-10-19: "wie ein zusammenhängendes
-             Gebäude... nicht nur links und rechts nebeneinander"): rooms used to be one single
-             horizontal strip; now ViewModel.RoomRows (MainViewModel) groups them into rows of
-             LayoutColumns, and this is a vertical ItemsControl-of-rows wrapping a horizontal
-             ItemsControl-of-rooms per row (RoomRow.cs/RoomRow.Rooms) — nested plain ItemsControls
-             rather than a Canvas with computed absolute positions: much lower risk to get right
-             blind (no generic x:DataType, no Canvas.Left/Top attached-property binding, reuses
-             the exact already-reasoned-through per-room template unchanged, just one level
-             deeper). -->
+             Spiral "building" layout (requested 2026-10-19, confirmed explicitly by the
+             maintainer over a simpler row-grid that turned out to look identical to the old
+             single-strip layout for a 1-2-room test case — "wie ein zusammenhängendes Gebäude...
+             rundrum um Räume erweitert"): ViewModel.RoomLayout (MainViewModel) computes an
+             absolute (Left, Top) per room in a spiral around the first one — see
+             MainViewModel.SpiralPositions, hand-traced and verified there. That needs a Canvas
+             with Canvas.Left/Canvas.Top per item rather than the nested-StackPanel trick used for
+             the (abandoned) row-grid — the room content Grid below is unchanged from before,
+             just now one level deeper (x:DataType is RoomLayoutEntry, so every former direct
+             property reference is now Room.<property>). Two separate Canvas-paneled
+             ItemsControls share the one RoomLayout list — doors drawn first (so rooms layer on
+             top of them), then rooms — rather than nesting the door inside the room template,
+             since a door's position is computed independently of the room's own size (see
+             MainViewModel.RebuildRoomLayout) and Canvas.Left/Top only works on a DIRECT child of
+             a Canvas. -->
         <ScrollViewer Grid.Row="3"
                       HorizontalScrollMode="Enabled"
                       HorizontalScrollBarVisibility="Auto"
                       VerticalScrollMode="Enabled"
                       VerticalScrollBarVisibility="Auto">
-            <ItemsControl ItemsSource="{x:Bind ViewModel.RoomRows, Mode=OneWay}">
-                <ItemsControl.ItemsPanel>
-                    <ItemsPanelTemplate>
-                        <StackPanel Orientation="Vertical" Spacing="0" HorizontalAlignment="Left" />
-                    </ItemsPanelTemplate>
-                </ItemsControl.ItemsPanel>
-                <ItemsControl.ItemTemplate>
-                    <DataTemplate x:DataType="vm:RoomRow">
-                        <StackPanel Orientation="Vertical" Spacing="0" HorizontalAlignment="Left">
-                            <ItemsControl ItemsSource="{x:Bind Rooms, Mode=OneWay}">
-                                <ItemsControl.ItemsPanel>
-                                    <ItemsPanelTemplate>
-                                        <StackPanel Orientation="Horizontal" Spacing="0" VerticalAlignment="Top" />
-                                    </ItemsPanelTemplate>
-                                </ItemsControl.ItemsPanel>
-                                <ItemsControl.ItemTemplate>
-                                    <DataTemplate x:DataType="vm:RoomViewModel">
-                        <!-- Each item is [room][door connector to the next room in this row] side
-                             by side, so reducing the ItemsPanel's own Spacing to 0 above makes
-                             the door symbol the only visible gap between two rooms. Simplification,
-                             disclosed: the last room in a row still gets a trailing door stub
-                             pointing at nothing (detecting "is this the last item" from inside a
-                             plain DataTemplate needs more machinery than this is worth — a short
-                             stub at the end is a harmless cosmetic loose end, not a functional
-                             problem; the row-to-row vertical connector below does track this
-                             properly via RoomRow.HasRowBelow, since that's computed centrally in
-                             MainViewModel rather than needed per-item here). -->
-                        <StackPanel Orientation="Horizontal" VerticalAlignment="Bottom" Spacing="0">
-                            <Grid Width="{x:Bind GridWidth, Mode=OneWay}" Height="{x:Bind GridHeight, Mode=OneWay}">
+            <Grid Width="{x:Bind ViewModel.RoomLayoutCanvasWidth, Mode=OneWay}"
+                  Height="{x:Bind ViewModel.RoomLayoutCanvasHeight, Mode=OneWay}"
+                  HorizontalAlignment="Left"
+                  VerticalAlignment="Top">
+
+                <!-- Door connection markers — a plain dashed square, not a directional symbol
+                     (see RoomLayoutEntry.cs for why: orientation would need a bound
+                     RenderTransform, one more unverifiable thing for a purely decorative detail
+                     that doesn't need to be direction-precise). -->
+                <ItemsControl ItemsSource="{x:Bind ViewModel.RoomLayout, Mode=OneWay}">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <Canvas />
+                        </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate x:DataType="vm:RoomLayoutEntry">
+                            <Grid Width="20" Height="20"
+                                  Canvas.Left="{x:Bind DoorLeft, Mode=OneWay}"
+                                  Canvas.Top="{x:Bind DoorTop, Mode=OneWay}"
+                                  Visibility="{x:Bind DoorVisibility, Mode=OneWay}">
+                                <Rectangle Stroke="{StaticResource RoomOutlineBrush}" StrokeThickness="1"
+                                           StrokeDashArray="2,2" Fill="Transparent" />
+                            </Grid>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+
+                <ItemsControl ItemsSource="{x:Bind ViewModel.RoomLayout, Mode=OneWay}">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <Canvas />
+                        </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate x:DataType="vm:RoomLayoutEntry">
+                            <Grid Canvas.Left="{x:Bind Left, Mode=OneWay}" Canvas.Top="{x:Bind Top, Mode=OneWay}"
+                                  Width="{x:Bind Room.GridWidth, Mode=OneWay}" Height="{x:Bind Room.GridHeight, Mode=OneWay}">
                                 <!-- Walls: a single thick stroke rather than true double-line
                                      architectural walls — offsetting a concave polygon (the
                                      L-shape/notched templates) inward by a wall thickness is a
                                      real computational-geometry problem (self-intersection risk
                                      at concave corners) that can't be verified by rendering here,
                                      so a thicker single line stands in for "wall" instead. -->
-                                <Polygon Points="{x:Bind OutlinePoints, Mode=OneWay}"
+                                <Polygon Points="{x:Bind Room.OutlinePoints, Mode=OneWay}"
                                          Fill="{StaticResource RoomFillBrush}"
                                          Stroke="{StaticResource RoomOutlineBrush}"
                                          StrokeThickness="3" />
 
                                 <!-- Two structurally separate zones (requested 2026-10-19: "klarere
                                      Zonen... kein Tisch kollidiert mit der Bezeichnung") instead of
-                                     the previous floating-overlay name, which the desk grid could
-                                     and did visually collide with: an Auto row reserved for the
-                                     name at the bottom ("auf dem Boden") that the desk GridView
-                                     above it can never be laid out into, by ordinary Grid-row
-                                     partitioning rather than manual position math. -->
-                                <Grid Margin="{x:Bind ContentMargin, Mode=OneWay}">
+                                     a floating-overlay name, which the desk grid could and did
+                                     visually collide with: an Auto row reserved for the name at
+                                     the bottom ("auf dem Boden") that the desk GridView above it
+                                     can never be laid out into, by ordinary Grid-row partitioning
+                                     rather than manual position math. -->
+                                <Grid Margin="{x:Bind Room.ContentMargin, Mode=OneWay}">
                                     <Grid.RowDefinitions>
                                         <RowDefinition Height="*" />
                                         <RowDefinition Height="Auto" />
@@ -181,14 +189,14 @@
                                          Each slot renders as a small desk-with-monitor symbol
                                          ("Arbeitsplatz"), dimmed when empty. -->
                                     <GridView Grid.Row="0"
-                                              ItemsSource="{x:Bind DeskSlots, Mode=OneWay}"
+                                              ItemsSource="{x:Bind Room.DeskSlots, Mode=OneWay}"
                                               SelectionMode="None"
                                               CanDragItems="True"
                                               AllowDrop="True"
                                               DragItemsStarting="OnNodeDragItemsStarting"
                                               Drop="OnRoomDrop"
                                               DragOver="OnListDragOver"
-                                              Tag="{x:Bind}"
+                                              Tag="{x:Bind Room}"
                                               Background="Transparent">
                                         <GridView.ItemTemplate>
                                             <DataTemplate x:DataType="vm:DeskSlot">
@@ -213,61 +221,33 @@
                                          IsEditingName and the handlers in MainPage.xaml.cs. -->
                                     <StackPanel Grid.Row="1" HorizontalAlignment="Center" Margin="0,6,0,0"
                                                 Orientation="Horizontal" Spacing="4"
-                                                Tag="{x:Bind}"
+                                                Tag="{x:Bind Room}"
                                                 PointerEntered="OnRoomLabelPointerEntered"
                                                 PointerExited="OnRoomLabelPointerExited">
-                                        <TextBlock Text="{x:Bind Name, Mode=OneWay}" FontWeight="SemiBold"
+                                        <TextBlock Text="{x:Bind Room.Name, Mode=OneWay}" FontWeight="SemiBold"
                                                    FontFamily="Consolas" Foreground="{StaticResource RoomOutlineBrush}"
-                                                   Visibility="{x:Bind NameTextVisibility, Mode=OneWay}"
+                                                   Visibility="{x:Bind Room.NameTextVisibility, Mode=OneWay}"
                                                    TextTrimming="CharacterEllipsis" />
-                                        <TextBox Text="{x:Bind Name, Mode=TwoWay}" FontFamily="Consolas" Width="110"
-                                                 Visibility="{x:Bind NameEditVisibility, Mode=OneWay}"
-                                                 Tag="{x:Bind}" KeyDown="OnRoomNameTextBoxKeyDown" LostFocus="OnRoomNameEditingLostFocus" />
-                                        <Button Content="✎" Padding="4,0" FontSize="10" Tag="{x:Bind}" Click="OnEditRoomNameClicked"
-                                                Visibility="{x:Bind EditButtonVisibility, Mode=OneWay}"
+                                        <TextBox Text="{x:Bind Room.Name, Mode=TwoWay}" FontFamily="Consolas" Width="110"
+                                                 Visibility="{x:Bind Room.NameEditVisibility, Mode=OneWay}"
+                                                 Tag="{x:Bind Room}" KeyDown="OnRoomNameTextBoxKeyDown" LostFocus="OnRoomNameEditingLostFocus" />
+                                        <!-- Plain text, no symbol glyphs (the maintainer's request
+                                             2026-10-19: "keine Emojis in Texte") — these were
+                                             Unicode pictograph characters (pencil/cross), not
+                                             actual emoji, but render the same unwanted way. -->
+                                        <Button Content="Umbenennen" Padding="4,0" FontSize="10" Tag="{x:Bind Room}" Click="OnEditRoomNameClicked"
+                                                Visibility="{x:Bind Room.EditButtonVisibility, Mode=OneWay}"
                                                 ToolTipService.ToolTip="Raum umbenennen" />
-                                        <Button Content="✕" Padding="4,0" FontSize="10" Tag="{x:Bind}" Click="OnDeleteRoomClicked"
-                                                Visibility="{x:Bind EffectiveDeleteButtonVisibility, Mode=OneWay}"
+                                        <Button Content="Löschen" Padding="4,0" FontSize="10" Tag="{x:Bind Room}" Click="OnDeleteRoomClicked"
+                                                Visibility="{x:Bind Room.EffectiveDeleteButtonVisibility, Mode=OneWay}"
                                                 ToolTipService.ToolTip="Raum löschen" />
                                     </StackPanel>
                                 </Grid>
                             </Grid>
-
-                            <!-- Horizontal door connector to the next room in this row ("per Tür
-                                 verbunden", requested 2026-10-19) — simplified 2026-10-19 after
-                                 "die Türen waren auch noch etwas buggy": dropped the Path/ArcSegment
-                                 quarter-circle swing (the most complex, least-certain geometry in
-                                 the whole visualization, most likely the actual bug) for two plain
-                                 Line elements — a door-leaf line plus a short diagonal suggesting
-                                 the opening. Far fewer ways for this to render wrong. Fixed size,
-                                 not aligned to either room's actual wall-meeting point (rooms
-                                 differ in height and aren't flush), so this reads as "connected via
-                                 a door" rather than an architecturally exact junction. -->
-                            <Grid Width="24" Height="24" VerticalAlignment="Bottom" Margin="0,0,0,4">
-                                <Line X1="2" Y1="22" X2="2" Y2="2" Stroke="{StaticResource RoomOutlineBrush}" StrokeThickness="1.5" />
-                                <Line X1="2" Y1="2" X2="20" Y2="20" Stroke="{StaticResource RoomOutlineBrush}"
-                                      StrokeThickness="1" StrokeDashArray="2,2" />
-                            </Grid>
-                                        </StackPanel>
-                                    </DataTemplate>
-                                </ItemsControl.ItemTemplate>
-                            </ItemsControl>
-
-                            <!-- Vertical door connector to the row below — only drawn when there
-                                 actually is one (RoomRow.HasRowBelow, computed centrally in
-                                 MainViewModel.RebuildRoomRows), so unlike the horizontal one above
-                                 this doesn't leave a dangling stub on the last row. Same simplified
-                                 Line-based symbol, rotated. -->
-                            <Grid Width="24" Height="24" HorizontalAlignment="Left" Margin="40,0,0,0"
-                                  Visibility="{x:Bind HasRowBelowVisibility, Mode=OneWay}">
-                                <Line X1="2" Y1="2" X2="22" Y2="2" Stroke="{StaticResource RoomOutlineBrush}" StrokeThickness="1.5" />
-                                <Line X1="2" Y1="2" X2="2" Y2="20" Stroke="{StaticResource RoomOutlineBrush}"
-                                      StrokeThickness="1" StrokeDashArray="2,2" />
-                            </Grid>
-                        </StackPanel>
-                    </DataTemplate>
-                </ItemsControl.ItemTemplate>
-            </ItemsControl>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </Grid>
         </ScrollViewer>
     </Grid>
 </Page>

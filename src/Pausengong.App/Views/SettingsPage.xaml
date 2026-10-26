@@ -4,12 +4,19 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
 >
 
+    <!-- Wrapped in a ScrollViewer (the maintainer's bug report 2026-10-19: "die Gefahrenzone
+         wird immer abgeschnitten") — the window has a fixed size (SettingsWindow.xaml.cs) but
+         this page's content doesn't: the break-times ListView grows with however many break
+         times are configured, with nothing to stop it consuming the whole window and pushing
+         the danger-zone row below the visible area. A ScrollViewer fixes this regardless of how
+         much content there ever is, rather than guessing at a window size that happens to be
+         "big enough" for today's content. -->
+    <ScrollViewer VerticalScrollMode="Enabled" VerticalScrollBarVisibility="Auto">
     <Grid Padding="20" RowSpacing="16">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
-            <RowDefinition Height="*" />
             <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
@@ -34,21 +41,23 @@
         </StackPanel>
 
         <StackPanel Grid.Row="2" Spacing="8" MaxWidth="320" HorizontalAlignment="Left">
-            <ListView x:Name="BreakTimesList" ItemsSource="{x:Bind ViewModel.BreakTimes, Mode=OneWay}" SelectionMode="Single" />
+            <ListView x:Name="BreakTimesList" ItemsSource="{x:Bind ViewModel.BreakTimes, Mode=OneWay}" SelectionMode="Single" MaxHeight="180" />
             <Button Content="Ausgewählte Zeit entfernen" Click="OnRemoveBreakTimeClicked" />
         </StackPanel>
 
         <!-- Danger zone: everything here either turns off the real-audio safety net (Testmodus)
              or plays a real sound on demand (Test-Gong) — grouped and pushed to the bottom so
              it's not the first thing anyone sees, but still unmistakable when they get here. -->
-        <Border Grid.Row="4"
+        <Border Grid.Row="3"
                 Padding="16"
                 CornerRadius="6"
                 BorderBrush="{StaticResource DangerZoneBorderBrush}"
                 BorderThickness="1"
                 Background="{StaticResource DangerZoneBackgroundBrush}">
             <StackPanel Spacing="12">
-                <TextBlock Text="⚠ Gefahrenzone" FontWeight="Bold" Foreground="{StaticResource DangerZoneBorderBrush}" />
+                <!-- No emoji prefix (the maintainer's request 2026-10-19: "keine Emojis in
+                     Texte") — the red border/background already signal "danger" on their own. -->
+                <TextBlock Text="Gefahrenzone" FontWeight="Bold" Foreground="{StaticResource DangerZoneBorderBrush}" />
 
                 <!-- Must stay unmistakable that turning this off means a real gong will play. -->
                 <Border Padding="16,10"
@@ -83,4 +92,5 @@
             </StackPanel>
         </Border>
     </Grid>
+    </ScrollViewer>
 </Page>

@@ -33,7 +33,7 @@ public partial class RoomViewModel : ObservableObject
     /// is still allowed — nothing is keyed off its display name, only <see cref="RoomId"/>.</summary>
     public bool IsDefaultRoom => RoomId == RoomConfig.DefaultRoomId;
 
-    /// <summary>Hides the "✕ Raum löschen" button for <see cref="IsDefaultRoom"/>.</summary>
+    /// <summary>Hides the "Löschen" button for <see cref="IsDefaultRoom"/>.</summary>
     public Visibility DeleteButtonVisibility => IsDefaultRoom ? Visibility.Collapsed : Visibility.Visible;
 
     /// <summary>Set from <c>MainPage.xaml.cs</c>'s PointerEntered/Exited on the room-name area
