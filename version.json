@@ -1,6 +1,6 @@
 {
-  "latestVersion": "1.1.0",
-  "urgencyScore": 2,
-  "message": "Raum-Grundriss ueberarbeitet, Update-Hinweis im Programm, zwei echte Bugfixes (verwaister Geraete-Eintrag nach Ausschalten, abgeschnittene Gefahrenzone im Einstellungen-Fenster).",
+  "latestVersion": "1.2.0",
+  "urgencyScore": 1,
+  "message": "Raum-Ansicht komplett neu: einfache Listen statt Grundriss, Arbeitsplatz-Symbol von oben (Tisch, Bildschirm, Tastatur, Maus).",
   "downloadUrl": "https://github.com/ITPetya/Pausengong/releases/tag/dev-latest"
 }

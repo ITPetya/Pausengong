@@ -81,198 +81,131 @@
             <Button Content="Raum hinzufügen" Click="OnAddRoomClicked" />
         </StackPanel>
 
-        <!-- Room "floor plan" visualization (replaced the plain rectangular card list
-             2026-10-19, restyled again same day after a real screenshot — see HANDOFF.md "Room
-             visualization" entries for the full history): each room is drawn as one of a fixed
-             set of hand-designed outlines (RoomShapeTemplates — rectangle, L-shape, notched
-             corners, outward bumps, ...), picked deterministically per room so it keeps the same
-             look across restarts, and grows as more devices land in it (RoomViewModel.Size). No
+        <!-- Room list (replaced the floor-plan/polygon/spiral visualization 2026-10-19 — "wir
+             schaffen die Grundrisse ab, machen Listen nur durch dezente vertikale Linie
+             getrennt"): that visualization's Canvas-based absolute positioning failed three
+             separate, differently-reasoned fix attempts in a row with the IDENTICAL symptom
+             (every room rendering stacked at the same position) — see HANDOFF.md "Room
+             visualization" history for exactly what was tried (x:Bind vs {Binding} on the
+             attached property, then ItemContainerStyle) and why each one failed. Rather than
+             attempt a fourth blind fix, this went back to layout mechanics already proven correct
+             by real screenshots: a plain horizontal ItemsControl of rooms (no Canvas, no attached
+             properties, no absolute positioning at all) — the exact mechanism the very first
+             version of this visualization used, before polygons/shapes were ever introduced, and
+             confirmed working then. Each room is a vertical list of workstations, separated from
+             its neighbor by a single-pixel vertical line (Rectangle) instead of a drawn wall. No
              separate "unassigned" list: every node that isn't in a custom room lives in
-             "Standardraum", the always-present first room shape below.
+             "Standardraum", the always-present first room below.
 
-             Drag/drop still targets the room's rectangular bounding box (the GridView below),
-             not a pixel-perfect hit test against the drawn polygon outline — the outline is
-             visual flavor, not the actual drop-target shape. That's a deliberate, disclosed
-             simplification: true per-pixel polygon hit-testing isn't something WinUI3 supports
-             out of the box, and this project has no way to visually verify custom hit-testing
-             code anyway (no Windows in the tool environment this was written in).
-
-             Spiral "building" layout (requested 2026-10-19, confirmed explicitly by the
-             maintainer over a simpler row-grid that turned out to look identical to the old
-             single-strip layout for a 1-2-room test case — "wie ein zusammenhängendes Gebäude...
-             rundrum um Räume erweitert"): ViewModel.RoomLayout (MainViewModel) computes an
-             absolute (Left, Top) per room in a spiral around the first one — see
-             MainViewModel.SpiralPositions, hand-traced and verified there. That needs a Canvas
-             with Canvas.Left/Canvas.Top per item rather than the nested-StackPanel trick used for
-             the (abandoned) row-grid — the room content Grid below is unchanged from before,
-             just now one level deeper (x:DataType is RoomLayoutEntry, so every former direct
-             property reference is now Room.<property>). Two separate Canvas-paneled
-             ItemsControls share the one RoomLayout list — doors drawn first (so rooms layer on
-             top of them), then rooms — rather than nesting the door inside the room template,
-             since a door's position is computed independently of the room's own size (see
-             MainViewModel.RebuildRoomLayout) and Canvas.Left/Top only works on a DIRECT child of
-             a Canvas.
-
-             Canvas.Left/Canvas.Top are set via ItemContainerStyle, not on the DataTemplate's own
-             root element (corrected 2026-10-19, SECOND attempt — the first fix, switching
-             {x:Bind} to {Binding} on the inner Grid, did not help; a follow-up screenshot showed
-             the exact same stacked-overlap result). The actual root cause: when an ItemsControl
-             generates items into a Canvas, each DataTemplate instance is wrapped in an implicit
-             ContentPresenter, and THAT — not anything inside the DataTemplate — is the real
-             direct child of the Canvas. Canvas.Left/Top only has any effect on a Canvas's direct
-             children, so setting it on the inner Grid (one level too deep) was inert regardless
-             of which binding syntax was used — both attempts were fixing the wrong symptom. Fix:
-             ItemsControl.ItemContainerStyle targeting ContentPresenter, with Setters for
-             Canvas.Left/Canvas.Top — this is the standard, long-documented WPF/UWP/WinUI pattern
-             for positioning ItemsControl items on a Canvas. Setter.Value only supports plain
-             {Binding}, not {x:Bind} (a Style isn't tied to one DataTemplate's compiled-binding
-             scope the way x:Bind requires), so that part of the previous fix was right regardless
-             — it just needed to be applied in the right place. -->
+             Drag/drop targets the room's ListView (its actual rectangular bounds) — there's no
+             polygon outline left to even consider a pixel-perfect hit test against, so that
+             earlier disclosed simplification no longer applies at all. -->
         <ScrollViewer Grid.Row="3"
                       HorizontalScrollMode="Enabled"
                       HorizontalScrollBarVisibility="Auto"
-                      VerticalScrollMode="Enabled"
-                      VerticalScrollBarVisibility="Auto">
-            <Grid Width="{x:Bind ViewModel.RoomLayoutCanvasWidth, Mode=OneWay}"
-                  Height="{x:Bind ViewModel.RoomLayoutCanvasHeight, Mode=OneWay}"
-                  HorizontalAlignment="Left"
-                  VerticalAlignment="Top">
+                      VerticalScrollMode="Disabled"
+                      VerticalScrollBarVisibility="Disabled">
+            <ItemsControl ItemsSource="{x:Bind ViewModel.Rooms, Mode=OneWay}">
+                <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate>
+                        <StackPanel Orientation="Horizontal" Spacing="0" VerticalAlignment="Top" />
+                    </ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="vm:RoomViewModel">
+                        <!-- A Grid, not a horizontal StackPanel, for [room content | divider]:
+                             a Rectangle with VerticalAlignment="Stretch" only actually stretches
+                             to match a sibling's height inside a Grid row — inside a StackPanel,
+                             the Rectangle has no natural height of its own to stretch FROM, so it
+                             would just collapse to zero. Grid.ColumnDefinitions sidesteps that. -->
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
 
-                <!-- Door connection markers — a plain dashed square, not a directional symbol
-                     (see RoomLayoutEntry.cs for why: orientation would need a bound
-                     RenderTransform, one more unverifiable thing for a purely decorative detail
-                     that doesn't need to be direction-precise). -->
-                <ItemsControl ItemsSource="{x:Bind ViewModel.RoomLayout, Mode=OneWay}">
-                    <ItemsControl.ItemsPanel>
-                        <ItemsPanelTemplate>
-                            <Canvas />
-                        </ItemsPanelTemplate>
-                    </ItemsControl.ItemsPanel>
-                    <ItemsControl.ItemContainerStyle>
-                        <Style TargetType="ContentPresenter">
-                            <Setter Property="Canvas.Left" Value="{Binding DoorLeft}" />
-                            <Setter Property="Canvas.Top" Value="{Binding DoorTop}" />
-                        </Style>
-                    </ItemsControl.ItemContainerStyle>
-                    <ItemsControl.ItemTemplate>
-                        <DataTemplate x:DataType="vm:RoomLayoutEntry">
-                            <Grid Width="20" Height="20"
-                                  Visibility="{x:Bind DoorVisibility, Mode=OneWay}">
-                                <Rectangle Stroke="{StaticResource RoomOutlineBrush}" StrokeThickness="1"
-                                           StrokeDashArray="2,2" Fill="Transparent" />
-                            </Grid>
-                        </DataTemplate>
-                    </ItemsControl.ItemTemplate>
-                </ItemsControl>
+                            <StackPanel Grid.Column="0" Orientation="Vertical" Width="240" Padding="12,0">
+                                <!-- Room name — hovering offers rename ("Umbenennen") as well as
+                                     delete ("Löschen"), both plain text (the maintainer's request
+                                     2026-10-19: "keine Emojis in Texte"). See
+                                     RoomViewModel.IsHeaderHovered/IsEditingName and the handlers
+                                     in MainPage.xaml.cs. -->
+                                <StackPanel Orientation="Horizontal" Spacing="4" Margin="0,0,0,8"
+                                            Tag="{x:Bind}"
+                                            PointerEntered="OnRoomLabelPointerEntered"
+                                            PointerExited="OnRoomLabelPointerExited">
+                                    <TextBlock Text="{x:Bind Name, Mode=OneWay}" FontWeight="SemiBold"
+                                               FontFamily="Consolas" Foreground="{StaticResource RoomOutlineBrush}"
+                                               Visibility="{x:Bind NameTextVisibility, Mode=OneWay}"
+                                               TextTrimming="CharacterEllipsis" />
+                                    <TextBox Text="{x:Bind Name, Mode=TwoWay}" FontFamily="Consolas" Width="120"
+                                             Visibility="{x:Bind NameEditVisibility, Mode=OneWay}"
+                                             Tag="{x:Bind}" KeyDown="OnRoomNameTextBoxKeyDown" LostFocus="OnRoomNameEditingLostFocus" />
+                                    <Button Content="Umbenennen" Padding="4,0" FontSize="10" Tag="{x:Bind}" Click="OnEditRoomNameClicked"
+                                            Visibility="{x:Bind EditButtonVisibility, Mode=OneWay}"
+                                            ToolTipService.ToolTip="Raum umbenennen" />
+                                    <Button Content="Löschen" Padding="4,0" FontSize="10" Tag="{x:Bind}" Click="OnDeleteRoomClicked"
+                                            Visibility="{x:Bind EffectiveDeleteButtonVisibility, Mode=OneWay}"
+                                            ToolTipService.ToolTip="Raum löschen" />
+                                </StackPanel>
 
-                <ItemsControl ItemsSource="{x:Bind ViewModel.RoomLayout, Mode=OneWay}">
-                    <ItemsControl.ItemsPanel>
-                        <ItemsPanelTemplate>
-                            <Canvas />
-                        </ItemsPanelTemplate>
-                    </ItemsControl.ItemsPanel>
-                    <ItemsControl.ItemContainerStyle>
-                        <Style TargetType="ContentPresenter">
-                            <Setter Property="Canvas.Left" Value="{Binding Left}" />
-                            <Setter Property="Canvas.Top" Value="{Binding Top}" />
-                        </Style>
-                    </ItemsControl.ItemContainerStyle>
-                    <ItemsControl.ItemTemplate>
-                        <DataTemplate x:DataType="vm:RoomLayoutEntry">
-                            <Grid Width="{x:Bind Room.GridWidth, Mode=OneWay}" Height="{x:Bind Room.GridHeight, Mode=OneWay}">
-                                <!-- Walls: a single thick stroke rather than true double-line
-                                     architectural walls — offsetting a concave polygon (the
-                                     L-shape/notched templates) inward by a wall thickness is a
-                                     real computational-geometry problem (self-intersection risk
-                                     at concave corners) that can't be verified by rendering here,
-                                     so a thicker single line stands in for "wall" instead. -->
-                                <Polygon Points="{x:Bind Room.OutlinePoints, Mode=OneWay}"
-                                         Fill="{StaticResource RoomFillBrush}"
-                                         Stroke="{StaticResource RoomOutlineBrush}"
-                                         StrokeThickness="3" />
+                                <!-- The actual drop target — a vertical list ("Liste", requested
+                                     2026-10-19), ItemsSource is DeskSlots not Nodes directly
+                                     (rooms always show "mehrere leere Tische", not just the real
+                                     occupied ones — see DeskSlot.cs/RoomViewModel.DeskSlots).
+                                     ListView, not GridView: GridView shares the ListViewBase base
+                                     class with ListView (see OnRoomDrop's cast, unaffected either
+                                     way), but a vertical ListView is what "Liste" actually means,
+                                     and matches what the very first version of this UI used before
+                                     any of the floor-plan work, which is exactly why it's the
+                                     proven-safe choice to return to. -->
+                                <ListView ItemsSource="{x:Bind DeskSlots, Mode=OneWay}"
+                                          SelectionMode="None"
+                                          CanDragItems="True"
+                                          AllowDrop="True"
+                                          DragItemsStarting="OnNodeDragItemsStarting"
+                                          Drop="OnRoomDrop"
+                                          DragOver="OnListDragOver"
+                                          Tag="{x:Bind}"
+                                          Background="Transparent">
+                                    <ListView.ItemTemplate>
+                                        <DataTemplate x:DataType="vm:DeskSlot">
+                                            <!-- Workstation, viewed from above (requested
+                                                 2026-10-19: "Tisch mit Bildschirm, Tastatur und
+                                                 Maus... von oben drauf geblickt"): desk outline,
+                                                 monitor (back), keyboard (middle), mouse (side) —
+                                                 all plain Rectangle shapes, same reasoning as
+                                                 before for avoiding any icon-font glyph dependency
+                                                 that could render wrong. -->
+                                            <StackPanel Orientation="Horizontal" Spacing="8" Padding="0,2"
+                                                        Opacity="{x:Bind VisualOpacity, Mode=OneWay}">
+                                                <Grid Width="64" Height="40">
+                                                    <Rectangle Stroke="{StaticResource RoomDeviceChipBrush}" StrokeThickness="1" Fill="Transparent" />
+                                                    <Rectangle Width="26" Height="6" Fill="{StaticResource RoomDeviceChipBrush}"
+                                                               VerticalAlignment="Top" HorizontalAlignment="Center" Margin="0,4,0,0" />
+                                                    <Rectangle Width="20" Height="5" Fill="{StaticResource RoomDeviceChipBrush}"
+                                                               VerticalAlignment="Center" HorizontalAlignment="Center" Margin="-6,0,0,0" />
+                                                    <Rectangle Width="4" Height="4" Fill="{StaticResource RoomDeviceChipBrush}"
+                                                               VerticalAlignment="Center" HorizontalAlignment="Center" Margin="18,0,0,0" />
+                                                </Grid>
+                                                <TextBlock Text="{x:Bind Node.DisplayLabel, Mode=OneWay}" FontFamily="Consolas"
+                                                           Foreground="{StaticResource RoomOutlineBrush}" FontSize="12"
+                                                           VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                                            </StackPanel>
+                                        </DataTemplate>
+                                    </ListView.ItemTemplate>
+                                </ListView>
+                            </StackPanel>
 
-                                <!-- Two structurally separate zones (requested 2026-10-19: "klarere
-                                     Zonen... kein Tisch kollidiert mit der Bezeichnung") instead of
-                                     a floating-overlay name, which the desk grid could and did
-                                     visually collide with: an Auto row reserved for the name at
-                                     the bottom ("auf dem Boden") that the desk GridView above it
-                                     can never be laid out into, by ordinary Grid-row partitioning
-                                     rather than manual position math. -->
-                                <Grid Margin="{x:Bind Room.ContentMargin, Mode=OneWay}">
-                                    <Grid.RowDefinitions>
-                                        <RowDefinition Height="*" />
-                                        <RowDefinition Height="Auto" />
-                                    </Grid.RowDefinitions>
-
-                                    <!-- The actual drop target — a GridView so devices auto-wrap
-                                         into a grid instead of one column, same drag/drop handlers
-                                         as the old ListView (GridView shares the ListViewBase base
-                                         class, see OnRoomDrop's cast). ItemsSource is DeskSlots,
-                                         not Nodes directly (requested 2026-10-19: rooms should
-                                         always show "mehrere leere Tische", not just the real
-                                         occupied ones) — see DeskSlot.cs/RoomViewModel.DeskSlots.
-                                         Each slot renders as a small desk-with-monitor symbol
-                                         ("Arbeitsplatz"), dimmed when empty. -->
-                                    <GridView Grid.Row="0"
-                                              ItemsSource="{x:Bind Room.DeskSlots, Mode=OneWay}"
-                                              SelectionMode="None"
-                                              CanDragItems="True"
-                                              AllowDrop="True"
-                                              DragItemsStarting="OnNodeDragItemsStarting"
-                                              Drop="OnRoomDrop"
-                                              DragOver="OnListDragOver"
-                                              Tag="{x:Bind Room}"
-                                              Background="Transparent">
-                                        <GridView.ItemTemplate>
-                                            <DataTemplate x:DataType="vm:DeskSlot">
-                                                <StackPanel Spacing="2" Margin="2" Width="56" Opacity="{x:Bind VisualOpacity, Mode=OneWay}">
-                                                    <Grid Height="36">
-                                                        <Rectangle Stroke="{StaticResource RoomDeviceChipBrush}" StrokeThickness="1" Fill="Transparent" />
-                                                        <Rectangle Width="22" Height="5" Fill="{StaticResource RoomDeviceChipBrush}"
-                                                                   VerticalAlignment="Top" Margin="0,5,0,0" HorizontalAlignment="Center" />
-                                                    </Grid>
-                                                    <TextBlock Text="{x:Bind Node.DisplayLabel, Mode=OneWay}" FontFamily="Consolas"
-                                                               Foreground="{StaticResource RoomOutlineBrush}" FontSize="10"
-                                                               HorizontalAlignment="Center" TextTrimming="CharacterEllipsis" />
-                                                </StackPanel>
-                                            </DataTemplate>
-                                        </GridView.ItemTemplate>
-                                    </GridView>
-
-                                    <!-- Room name "auf dem Boden" (on the floor) — its own
-                                         reserved row now, guaranteed clear of desks. Hovering
-                                         offers rename (requested 2026-10-19, "nicht nur löschen")
-                                         as well as delete — see RoomViewModel.IsHeaderHovered/
-                                         IsEditingName and the handlers in MainPage.xaml.cs. -->
-                                    <StackPanel Grid.Row="1" HorizontalAlignment="Center" Margin="0,6,0,0"
-                                                Orientation="Horizontal" Spacing="4"
-                                                Tag="{x:Bind Room}"
-                                                PointerEntered="OnRoomLabelPointerEntered"
-                                                PointerExited="OnRoomLabelPointerExited">
-                                        <TextBlock Text="{x:Bind Room.Name, Mode=OneWay}" FontWeight="SemiBold"
-                                                   FontFamily="Consolas" Foreground="{StaticResource RoomOutlineBrush}"
-                                                   Visibility="{x:Bind Room.NameTextVisibility, Mode=OneWay}"
-                                                   TextTrimming="CharacterEllipsis" />
-                                        <TextBox Text="{x:Bind Room.Name, Mode=TwoWay}" FontFamily="Consolas" Width="110"
-                                                 Visibility="{x:Bind Room.NameEditVisibility, Mode=OneWay}"
-                                                 Tag="{x:Bind Room}" KeyDown="OnRoomNameTextBoxKeyDown" LostFocus="OnRoomNameEditingLostFocus" />
-                                        <!-- Plain text, no symbol glyphs (the maintainer's request
-                                             2026-10-19: "keine Emojis in Texte") — these were
-                                             Unicode pictograph characters (pencil/cross), not
-                                             actual emoji, but render the same unwanted way. -->
-                                        <Button Content="Umbenennen" Padding="4,0" FontSize="10" Tag="{x:Bind Room}" Click="OnEditRoomNameClicked"
-                                                Visibility="{x:Bind Room.EditButtonVisibility, Mode=OneWay}"
-                                                ToolTipService.ToolTip="Raum umbenennen" />
-                                        <Button Content="Löschen" Padding="4,0" FontSize="10" Tag="{x:Bind Room}" Click="OnDeleteRoomClicked"
-                                                Visibility="{x:Bind Room.EffectiveDeleteButtonVisibility, Mode=OneWay}"
-                                                ToolTipService.ToolTip="Raum löschen" />
-                                    </StackPanel>
-                                </Grid>
-                            </Grid>
-                        </DataTemplate>
-                    </ItemsControl.ItemTemplate>
-                </ItemsControl>
-            </Grid>
+                            <!-- Dezente vertikale Linie (requested 2026-10-19) between rooms —
+                                 the only separator now, no drawn walls/doors at all. -->
+                            <Rectangle Grid.Column="1" Width="1" Margin="12,8"
+                                       Fill="{StaticResource RoomDeviceChipBrush}"
+                                       VerticalAlignment="Stretch" />
+                        </Grid>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
         </ScrollViewer>
     </Grid>
 </Page>
