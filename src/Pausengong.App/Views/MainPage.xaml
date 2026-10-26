@@ -111,7 +111,18 @@
              top of them), then rooms — rather than nesting the door inside the room template,
              since a door's position is computed independently of the room's own size (see
              MainViewModel.RebuildRoomLayout) and Canvas.Left/Top only works on a DIRECT child of
-             a Canvas. -->
+             a Canvas.
+
+             Canvas.Left/Canvas.Top use plain {Binding}, not {x:Bind} (fixed 2026-10-19 after a
+             real screenshot showed every room stacked on top of each other at the same position
+             — confirmed by the maintainer: "jetzt haben wir Überlagerungen"): {x:Bind} on an
+             attached property is a known WinUI3/UWP weak spot — it compiles without error (this
+             did, and CI built it fine) but doesn't reliably apply at runtime. {Binding} resolves
+             at runtime against the DataTemplate item's DataContext (set automatically by
+             ItemsControl regardless of x:Bind being used elsewhere on the page) and is the
+             community-documented workaround for exactly this. Every other binding in this
+             template stays {x:Bind} — this is scoped to just the two attached properties that
+             actually hit the problem. -->
         <ScrollViewer Grid.Row="3"
                       HorizontalScrollMode="Enabled"
                       HorizontalScrollBarVisibility="Auto"
@@ -135,8 +146,8 @@
                     <ItemsControl.ItemTemplate>
                         <DataTemplate x:DataType="vm:RoomLayoutEntry">
                             <Grid Width="20" Height="20"
-                                  Canvas.Left="{x:Bind DoorLeft, Mode=OneWay}"
-                                  Canvas.Top="{x:Bind DoorTop, Mode=OneWay}"
+                                  Canvas.Left="{Binding DoorLeft}"
+                                  Canvas.Top="{Binding DoorTop}"
                                   Visibility="{x:Bind DoorVisibility, Mode=OneWay}">
                                 <Rectangle Stroke="{StaticResource RoomOutlineBrush}" StrokeThickness="1"
                                            StrokeDashArray="2,2" Fill="Transparent" />
@@ -153,7 +164,7 @@
                     </ItemsControl.ItemsPanel>
                     <ItemsControl.ItemTemplate>
                         <DataTemplate x:DataType="vm:RoomLayoutEntry">
-                            <Grid Canvas.Left="{x:Bind Left, Mode=OneWay}" Canvas.Top="{x:Bind Top, Mode=OneWay}"
+                            <Grid Canvas.Left="{Binding Left}" Canvas.Top="{Binding Top}"
                                   Width="{x:Bind Room.GridWidth, Mode=OneWay}" Height="{x:Bind Room.GridHeight, Mode=OneWay}">
                                 <!-- Walls: a single thick stroke rather than true double-line
                                      architectural walls — offsetting a concave polygon (the
