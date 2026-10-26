@@ -113,16 +113,21 @@
              MainViewModel.RebuildRoomLayout) and Canvas.Left/Top only works on a DIRECT child of
              a Canvas.
 
-             Canvas.Left/Canvas.Top use plain {Binding}, not {x:Bind} (fixed 2026-10-19 after a
-             real screenshot showed every room stacked on top of each other at the same position
-             — confirmed by the maintainer: "jetzt haben wir Überlagerungen"): {x:Bind} on an
-             attached property is a known WinUI3/UWP weak spot — it compiles without error (this
-             did, and CI built it fine) but doesn't reliably apply at runtime. {Binding} resolves
-             at runtime against the DataTemplate item's DataContext (set automatically by
-             ItemsControl regardless of x:Bind being used elsewhere on the page) and is the
-             community-documented workaround for exactly this. Every other binding in this
-             template stays {x:Bind} — this is scoped to just the two attached properties that
-             actually hit the problem. -->
+             Canvas.Left/Canvas.Top are set via ItemContainerStyle, not on the DataTemplate's own
+             root element (corrected 2026-10-19, SECOND attempt — the first fix, switching
+             {x:Bind} to {Binding} on the inner Grid, did not help; a follow-up screenshot showed
+             the exact same stacked-overlap result). The actual root cause: when an ItemsControl
+             generates items into a Canvas, each DataTemplate instance is wrapped in an implicit
+             ContentPresenter, and THAT — not anything inside the DataTemplate — is the real
+             direct child of the Canvas. Canvas.Left/Top only has any effect on a Canvas's direct
+             children, so setting it on the inner Grid (one level too deep) was inert regardless
+             of which binding syntax was used — both attempts were fixing the wrong symptom. Fix:
+             ItemsControl.ItemContainerStyle targeting ContentPresenter, with Setters for
+             Canvas.Left/Canvas.Top — this is the standard, long-documented WPF/UWP/WinUI pattern
+             for positioning ItemsControl items on a Canvas. Setter.Value only supports plain
+             {Binding}, not {x:Bind} (a Style isn't tied to one DataTemplate's compiled-binding
+             scope the way x:Bind requires), so that part of the previous fix was right regardless
+             — it just needed to be applied in the right place. -->
         <ScrollViewer Grid.Row="3"
                       HorizontalScrollMode="Enabled"
                       HorizontalScrollBarVisibility="Auto"
@@ -143,11 +148,15 @@
                             <Canvas />
                         </ItemsPanelTemplate>
                     </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemContainerStyle>
+                        <Style TargetType="ContentPresenter">
+                            <Setter Property="Canvas.Left" Value="{Binding DoorLeft}" />
+                            <Setter Property="Canvas.Top" Value="{Binding DoorTop}" />
+                        </Style>
+                    </ItemsControl.ItemContainerStyle>
                     <ItemsControl.ItemTemplate>
                         <DataTemplate x:DataType="vm:RoomLayoutEntry">
                             <Grid Width="20" Height="20"
-                                  Canvas.Left="{Binding DoorLeft}"
-                                  Canvas.Top="{Binding DoorTop}"
                                   Visibility="{x:Bind DoorVisibility, Mode=OneWay}">
                                 <Rectangle Stroke="{StaticResource RoomOutlineBrush}" StrokeThickness="1"
                                            StrokeDashArray="2,2" Fill="Transparent" />
@@ -162,10 +171,15 @@
                             <Canvas />
                         </ItemsPanelTemplate>
                     </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemContainerStyle>
+                        <Style TargetType="ContentPresenter">
+                            <Setter Property="Canvas.Left" Value="{Binding Left}" />
+                            <Setter Property="Canvas.Top" Value="{Binding Top}" />
+                        </Style>
+                    </ItemsControl.ItemContainerStyle>
                     <ItemsControl.ItemTemplate>
                         <DataTemplate x:DataType="vm:RoomLayoutEntry">
-                            <Grid Canvas.Left="{Binding Left}" Canvas.Top="{Binding Top}"
-                                  Width="{x:Bind Room.GridWidth, Mode=OneWay}" Height="{x:Bind Room.GridHeight, Mode=OneWay}">
+                            <Grid Width="{x:Bind Room.GridWidth, Mode=OneWay}" Height="{x:Bind Room.GridHeight, Mode=OneWay}">
                                 <!-- Walls: a single thick stroke rather than true double-line
                                      architectural walls — offsetting a concave polygon (the
                                      L-shape/notched templates) inward by a wall thickness is a
